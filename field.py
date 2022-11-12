@@ -218,7 +218,7 @@ def reveal_emply_cell(x: int, y: int):
 def game_over_reveal():
     for row in _field:
         for cell in row:
-            if cell.content == -1 and cell.state == 0:
+            if -2 <= cell.content <= -1 and cell.state == 0:
                 cell.state = 1
             if 0 <= cell.content <= 8 and cell.state == 2:
                 cell.state = 3
