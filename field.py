@@ -1,6 +1,7 @@
 import random
 import dataclasses
 import time
+from typing import Iterable
 
 MAX_MINES_PCT = 0.5
 MIN_FIELD_SIZE = 5
@@ -84,7 +85,7 @@ def start_game(width: int, height: int, mine_count: int):
             if _field[x][y].content != 0:
                 continue
 
-            _field[x][y].content = _count_neighboors(x, y)
+            _field[x][y].content = _count_neighbor_mines(x, y)
 
     _mine_count = mine_count
     _flags_count = _revealed_count = 0
@@ -93,26 +94,38 @@ def start_game(width: int, height: int, mine_count: int):
     _preview_pos = None
 
 
-def _count_neighboors(x: int, y: int) -> int:
-    count = 0
+def iter_neighbors(x: int, y: int) -> Iterable[tuple[int, int]]:
     if y > 0:
-        count += _field[x][y - 1].content == -1
+        yield x, y - 1
     if y < _height - 1:
-        count += _field[x][y + 1].content == -1
+        yield x, y + 1
 
     if x > 0:
-        count += _field[x - 1][y].content == -1
+        yield x - 1, y
         if y > 0:
-            count += _field[x - 1][y - 1].content == -1
+            yield x - 1, y - 1
         if y < _height - 1:
-            count += _field[x - 1][y + 1].content == -1
+            yield x - 1, y + 1
 
     if x < _width - 1:
-        count += _field[x + 1][y].content == -1
+        yield x + 1, y
         if y > 0:
-            count += _field[x + 1][y - 1].content == -1
+            yield x + 1, y - 1
         if y < _height - 1:
-            count += _field[x + 1][y + 1].content == -1
+            yield x + 1, y + 1
+
+
+def _count_neighbor_mines(x: int, y: int) -> int:
+    count = 0
+    for i, j in iter_neighbors(x, y):
+        count += _field[i][j].content == -1
+    return count
+
+
+def _count_neighbor_flags(x: int, y: int) -> int:
+    count = 0
+    for i, j in iter_neighbors(x, y):
+        count += _field[i][j].state == 2
     return count
 
 
@@ -139,8 +152,11 @@ def cell_up(x: int, y: int):
 
     if _field[x][y].state == 0:
         reveal_cell(x, y)
-    elif _field[x][y].state == 1:
-        ...
+    elif _field[x][y].state == 1 and _field[x][y].content > 0:
+        if _count_neighbor_flags(x, y) != _field[x][y].content:
+            return
+        for i, j in iter_neighbors(x, y):
+            reveal_cell(i, j)
 
 
 def reveal_cell(x: int, y: int):
@@ -166,8 +182,14 @@ def reveal_cell(x: int, y: int):
                 continue
             if _field[new_x][new_y].content < 0:
                 continue
+
+            _field[x][y].content = 0
+            for i, j in iter_neighbors(x, y):
+                _field[i][j].content = _count_neighbor_mines(i, j)
+
             _field[new_x][new_y].content = -1
-            _field[x][y].content = _count_neighboors(x, y)
+            for i, j in iter_neighbors(new_x, new_y):
+                _field[i][j].content = _count_neighbor_mines(i, j)
             break
 
     if _start_time is None:
