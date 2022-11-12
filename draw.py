@@ -124,7 +124,7 @@ def draw_field(screen: pygame.Surface):
             contents, state = field.get_cell_state(x, y)
             pos = x * 16 + 4, y * 16 + 40
             if state == 0:
-                if field.is_preview(x, y):
+                if field.in_preview(x, y):
                     screen.blit(tiles[0], pos)  # preview hidden
                 else:
                     screen.blit(tile_hidden, pos)  # normal hidden
@@ -160,5 +160,7 @@ def draw_face(screen: pygame.Surface):
         screen.blit(face_dead, pos)
     elif field.game_won():
         screen.blit(face_cool, pos)
+    elif field.is_preview():
+        screen.blit(face_oh, pos)
     else:
         screen.blit(face_normal, pos)

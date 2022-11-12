@@ -277,7 +277,7 @@ def clear_preview():
     _preview_pos = None
 
 
-def is_preview(x: int, y: int):
+def in_preview(x: int, y: int):
     if _preview_pos is None:
         return False
 
@@ -286,3 +286,9 @@ def is_preview(x: int, y: int):
     elif _field[_preview_pos[0]][_preview_pos[1]].state == 1 and _field[_preview_pos[0]][_preview_pos[1]].content > 0:  # number
         return abs(x - _preview_pos[0]) < 2 and abs(y - _preview_pos[1]) < 2 and _field[x][y].state == 0
     return False
+
+
+def is_preview():
+    if _game_over or _victory:
+        return
+    return _preview_pos is not None
