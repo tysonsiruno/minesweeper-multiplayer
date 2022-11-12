@@ -18,9 +18,11 @@ _width: int = 9
 _height: int = 9
 _mine_count: int = 0
 _flags_count: int = 0
+_revealed_count: int = 0
 _start_time: float = None
+_victory: bool = False
 _game_over: bool = False
-_game_over_time: int = None
+_game_finish_time: int = None
 
 
 def get_field_width() -> int:
@@ -37,7 +39,7 @@ def get_mines_left() -> int:
 
 def get_time() -> int:
     if _game_over:
-        return _game_over_time
+        return _game_finish_time
     if _start_time is None:
         return 0
     return int(time.monotonic() - _start_time)
@@ -52,7 +54,7 @@ def game_over() -> bool:
 
 
 def start_game(width: int, height: int, mine_count: int):
-    global _field, _mine_count, _flags_count, _start_time, _game_over, _game_over_time
+    global _field, _mine_count, _flags_count, _revealed_count, _start_time, _victory, _game_over, _game_finish_time
 
     if width < MIN_FIELD_SIZE or height < MIN_FIELD_SIZE:
         raise ValueError(f'Requested field size is too small.\nMinimum dimension is {MIN_FIELD_SIZE}')
@@ -77,11 +79,11 @@ def start_game(width: int, height: int, mine_count: int):
                 continue
 
             _field[x][y].content = _count_neighboors(x, y)
+
     _mine_count = mine_count
-    _flags_count = 0
-    _start_time = None
-    _game_over = False
-    _game_over_time = None
+    _flags_count = _revealed_count = 0
+    _victory = _game_over = False
+    _start_time = _game_finish_time = None
 
 
 def _count_neighboors(x: int, y: int) -> int:
@@ -126,19 +128,21 @@ def reveal_cell(x: int, y: int) -> bool:
     :return: True if exploded on revealed mine
     TODO: first reveal cannot hit a bomb
     """
-    global _start_time, _game_over, _game_over_time
-    if _field[x][y].state == 2:
-        return False
-    if _field[x][y].state == 1:
-        return False
+    global _start_time, _game_over, _game_finish_time
+
+    if _game_over or _victory:
+        return
+
+    if _field[x][y].state == 2 or _field[x][y].state == 1:
+        return
 
     if _field[x][y].content == -1:
         if _start_time is not None:
             _field[x][y].content = -2
             _game_over = True
-            _game_over_time = get_time()
+            _game_finish_time = get_time()
             game_over_reveal()
-            return True
+            return
 
         while True:
             new_x, new_y = random.randint(0, _width - 1), random.randint(0, _height - 1)
@@ -153,9 +157,23 @@ def reveal_cell(x: int, y: int) -> bool:
     if _start_time is None:
         _start_time = time.monotonic()
 
+    reveal_emply_cell(x, y)
+
+    if _width * _height - _mine_count == _revealed_count:
+        # Victory!
+        global _victory
+        _victory = True
+        _game_finish_time = get_time()
+        victory_flag()
+
+
+def reveal_emply_cell(x: int, y: int):
+    global _revealed_count
+
     if _field[x][y].content > 0:
         _field[x][y].state = 1
-        return False
+        _revealed_count += 1
+        return
 
     visited: set[tuple[int, int]] = {}
     to_visit: list[tuple[int, int]] = {(x, y)}
@@ -167,7 +185,9 @@ def reveal_cell(x: int, y: int) -> bool:
             continue
 
         _field[x][y].state = 1
+        _revealed_count += 1
         visited.add((x, y))
+
         if _field[x][y].content != 0:
             continue
         to_visit.extend(
@@ -183,8 +203,6 @@ def reveal_cell(x: int, y: int) -> bool:
             )
         )
 
-    return False
-
 
 def game_over_reveal():
     for row in _field:
@@ -193,3 +211,10 @@ def game_over_reveal():
                 cell.state = 1
             if 0 <= cell.content <= 8 and cell.state == 2:
                 cell.state = 3
+
+
+def victory_flag():
+    for row in _field:
+        for cell in row:
+            if cell.content == -1:
+                cell.state = 2
