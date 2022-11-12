@@ -61,7 +61,7 @@ def game_over() -> bool:
 
 
 def start_game(width: int, height: int, mine_count: int):
-    global _field, _mine_count, _flags_count, _revealed_count, _start_time, _victory, _game_over, _game_finish_time, _preview_pos
+    global _width, _height, _field, _mine_count, _flags_count, _revealed_count, _start_time, _victory, _game_over, _game_finish_time, _preview_pos
 
     if width < MIN_FIELD_SIZE or height < MIN_FIELD_SIZE:
         raise ValueError(f'Requested field size is too small.\nMinimum dimension is {MIN_FIELD_SIZE}')
@@ -70,6 +70,8 @@ def start_game(width: int, height: int, mine_count: int):
     if mine_count > width * height * MAX_MINES_PCT:
         raise ValueError(f'Requested mine count is too large.\n Mine count cannot exceed cell count times {MAX_MINES_PCT}')
 
+    _width = width
+    _height = height
     _field = [[Cell(content=0, state=0) for _ in range(height)] for _ in range(width)]
 
     c = 0
