@@ -133,11 +133,17 @@ def flag_cell(x: int, y: int):
         _flags_count += 1
 
 
-def reveal_cell(x: int, y: int) -> bool:
-    """
-    :return: True if exploded on revealed mine
-    TODO: first reveal cannot hit a bomb
-    """
+def cell_up(x: int, y: int):
+    if _game_over or _victory:
+        return
+
+    if _field[x][y].state == 0:
+        reveal_cell(x, y)
+    elif _field[x][y].state == 1:
+        ...
+
+
+def reveal_cell(x: int, y: int):
     global _start_time, _game_over, _game_finish_time, _victory
 
     if _game_over or _victory:
