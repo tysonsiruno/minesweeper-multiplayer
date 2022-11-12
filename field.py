@@ -183,13 +183,15 @@ def reveal_cell(x: int, y: int):
             if _field[new_x][new_y].content < 0:
                 continue
 
-            _field[x][y].content = 0
+            _field[x][y].content = _count_neighbor_mines(x, y)
             for i, j in iter_neighbors(x, y):
-                _field[i][j].content = _count_neighbor_mines(i, j)
+                if _field[i][j].content >= 0:
+                    _field[i][j].content = _count_neighbor_mines(i, j)
 
             _field[new_x][new_y].content = -1
             for i, j in iter_neighbors(new_x, new_y):
-                _field[i][j].content = _count_neighbor_mines(i, j)
+                if _field[i][j].content >= 0:
+                    _field[i][j].content = _count_neighbor_mines(i, j)
             break
 
     if _start_time is None:
