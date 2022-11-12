@@ -38,7 +38,7 @@ def get_mines_left() -> int:
 
 
 def get_time() -> int:
-    if _game_over:
+    if _game_over or _victory:
         return _game_finish_time
     if _start_time is None:
         return 0
@@ -115,6 +115,9 @@ def _count_neighboors(x: int, y: int) -> int:
 
 def flag_cell(x: int, y: int):
     global _flags_count
+
+    if _game_over or _victory:
+        return
 
     if _field[x][y].state == 1:
         return
