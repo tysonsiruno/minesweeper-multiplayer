@@ -14,6 +14,8 @@ class Cell:
 
 
 _field: list[list[Cell]] = None
+_width: int = 9
+_height: int = 9
 _mine_count: int = 0
 _flags_count: int = 0
 _start_time: float = None
@@ -22,11 +24,11 @@ _game_over_time: int = None
 
 
 def get_field_width() -> int:
-    return len(_field)
+    return _width
 
 
 def get_field_height() -> int:
-    return len(_field[0])
+    return _height
 
 
 def get_mines_left() -> int:
@@ -74,7 +76,7 @@ def start_game(width: int, height: int, mine_count: int):
             if _field[x][y].content != 0:
                 continue
 
-            _field[x][y].content = _count_neighboors(x, y, width, height)
+            _field[x][y].content = _count_neighboors(x, y)
     _mine_count = mine_count
     _flags_count = 0
     _start_time = None
@@ -82,25 +84,25 @@ def start_game(width: int, height: int, mine_count: int):
     _game_over_time = None
 
 
-def _count_neighboors(x: int, y: int, width: int, height: int) -> int:
+def _count_neighboors(x: int, y: int) -> int:
     count = 0
     if y > 0:
         count += _field[x][y - 1].content == -1
-    if y < height - 1:
+    if y < _height - 1:
         count += _field[x][y + 1].content == -1
 
     if x > 0:
         count += _field[x - 1][y].content == -1
         if y > 0:
             count += _field[x - 1][y - 1].content == -1
-        if y < height - 1:
+        if y < _height - 1:
             count += _field[x - 1][y + 1].content == -1
 
-    if x < width - 1:
+    if x < _width - 1:
         count += _field[x + 1][y].content == -1
         if y > 0:
             count += _field[x + 1][y - 1].content == -1
-        if y < height - 1:
+        if y < _height - 1:
             count += _field[x + 1][y + 1].content == -1
     return count
 
@@ -138,15 +140,14 @@ def reveal_cell(x: int, y: int) -> bool:
             game_over_reveal()
             return True
 
-        w, h = get_field_width(), get_field_height()
         while True:
-            new_x, new_y = random.randint(0, w - 1), random.randint(0, h - 1)
+            new_x, new_y = random.randint(0, _width - 1), random.randint(0, _height - 1)
             if new_x == x and new_y == y:
                 continue
             if _field[new_x][new_y].content < 0:
                 continue
             _field[new_x][new_y].content = -1
-            _field[x][y].content = _count_neighboors(x, y, w, h)
+            _field[x][y].content = _count_neighboors(x, y)
             break
 
     if _start_time is None:
@@ -160,7 +161,9 @@ def reveal_cell(x: int, y: int) -> bool:
     to_visit: list[tuple[int, int]] = {(x, y)}
     while len(to_visit) > 0:
         x, y = to_visit.pop()
-        if (x, y) in visited or x < 0 or y < 0 or x >= len(_field) or y >= len(_field[0]):
+        if x < 0 or y < 0 or x >= _width or y >= _height:
+            continue
+        if (x, y) in visited:
             continue
 
         _field[x][y].state = 1
