@@ -24,6 +24,8 @@ _victory: bool = False
 _game_over: bool = False
 _game_finish_time: int = None
 
+_preview_pos: tuple[int, int] = None
+
 
 def get_field_width() -> int:
     return _width
@@ -58,7 +60,7 @@ def game_over() -> bool:
 
 
 def start_game(width: int, height: int, mine_count: int):
-    global _field, _mine_count, _flags_count, _revealed_count, _start_time, _victory, _game_over, _game_finish_time
+    global _field, _mine_count, _flags_count, _revealed_count, _start_time, _victory, _game_over, _game_finish_time, _preview_pos
 
     if width < MIN_FIELD_SIZE or height < MIN_FIELD_SIZE:
         raise ValueError(f'Requested field size is too small.\nMinimum dimension is {MIN_FIELD_SIZE}')
@@ -88,6 +90,7 @@ def start_game(width: int, height: int, mine_count: int):
     _flags_count = _revealed_count = 0
     _victory = _game_over = False
     _start_time = _game_finish_time = None
+    _preview_pos = None
 
 
 def _count_neighboors(x: int, y: int) -> int:
@@ -225,3 +228,30 @@ def victory_flag():
         for cell in row:
             if cell.content == -1:
                 cell.state = 2
+
+
+def set_preview(x: int, y: int):
+    global _preview_pos
+    if _game_over or _victory:
+        return
+
+    if 0 <= _field[x][y].state <= 1:
+        _preview_pos = x, y
+    else:
+        _preview_pos = None
+
+
+def clear_preview():
+    global _preview_pos
+    _preview_pos = None
+
+
+def is_preview(x: int, y: int):
+    if _preview_pos is None:
+        return False
+
+    if _field[_preview_pos[0]][_preview_pos[1]].state == 0:  # hidden
+        return (x, y) == _preview_pos
+    elif _field[_preview_pos[0]][_preview_pos[1]].state == 1 and _field[_preview_pos[0]][_preview_pos[1]].content > 0:  # number
+        return abs(x - _preview_pos[0]) < 2 and abs(y - _preview_pos[1]) < 2 and _field[x][y].state == 0
+    return False
