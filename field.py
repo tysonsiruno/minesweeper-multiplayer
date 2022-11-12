@@ -1,5 +1,6 @@
 import random
 import dataclasses
+import time
 
 MAX_MINES_PCT = 0.5
 MIN_FIELD_SIZE = 5
@@ -13,6 +14,11 @@ class Cell:
 
 
 _field: list[list[Cell]] = None
+_mine_count: int = 0
+_flags_count: int = 0
+_start_time: float = None
+_game_over: bool = False
+_game_over_time: int = None
 
 
 def get_field_width() -> int:
@@ -23,8 +29,28 @@ def get_field_height() -> int:
     return len(_field[0])
 
 
+def get_mines_left() -> int:
+    return max(_mine_count - _flags_count, 0)
+
+
+def get_time() -> int:
+    if _game_over:
+        return _game_over_time
+    if _start_time is None:
+        return 0
+    return int(time.monotonic() - _start_time)
+
+
+def get_cell_state(x: int, y: int) -> tuple[int, int]:
+    return _field[x][y].content, _field[x][y].state
+
+
+def game_over() -> bool:
+    return _game_over
+
+
 def start_game(width: int, height: int, mine_count: int):
-    global _field
+    global _field, _mine_count, _flags_count, _start_time, _game_over, _game_over_time
 
     if width < MIN_FIELD_SIZE or height < MIN_FIELD_SIZE:
         raise ValueError(f'Requested field size is too small.\nMinimum dimension is {MIN_FIELD_SIZE}')
@@ -49,6 +75,11 @@ def start_game(width: int, height: int, mine_count: int):
                 continue
 
             _field[x][y].content = _count_neighboors(x, y, width, height)
+    _mine_count = mine_count
+    _flags_count = 0
+    _start_time = None
+    _game_over = False
+    _game_over_time = None
 
 
 def _count_neighboors(x: int, y: int, width: int, height: int) -> int:
@@ -75,23 +106,51 @@ def _count_neighboors(x: int, y: int, width: int, height: int) -> int:
 
 
 def flag_cell(x: int, y: int):
+    global _flags_count
+
     if _field[x][y].state == 1:
         return
-    _field[x][y].state = 0 if _field[x][y].state == 2 else 2
+
+    if _field[x][y].state == 2:
+        _field[x][y].state = 0
+        _flags_count -= 1
+    else:
+        _field[x][y].state = 2
+        _flags_count += 1
 
 
 def reveal_cell(x: int, y: int) -> bool:
     """
     :return: True if exploded on revealed mine
+    TODO: first reveal cannot hit a bomb
     """
+    global _start_time, _game_over, _game_over_time
     if _field[x][y].state == 2:
         return False
     if _field[x][y].state == 1:
         return False
 
     if _field[x][y].content == -1:
-        _field[x][y].content = -2
-        return True
+        if _start_time is not None:
+            _field[x][y].content = -2
+            _game_over = True
+            _game_over_time = get_time()
+            game_over_reveal()
+            return True
+
+        w, h = get_field_width(), get_field_height()
+        while True:
+            new_x, new_y = random.randint(0, w - 1), random.randint(0, h - 1)
+            if new_x == x and new_y == y:
+                continue
+            if _field[new_x][new_y].content < 0:
+                continue
+            _field[new_x][new_y].content = -1
+            _field[x][y].content = _count_neighboors(x, y, w, h)
+            break
+
+    if _start_time is None:
+        _start_time = time.monotonic()
 
     if _field[x][y].content > 0:
         _field[x][y].state = 1
