@@ -115,7 +115,17 @@ def draw_borders(screen: pygame.Surface):
 
 
 def draw_field(screen: pygame.Surface):
-    ...
+    w, h = field.get_field_width(), field.get_field_height()
+    for x in range(w):
+        for y in range(h):
+            contents, state = field.get_cell_state(x, y)
+            pos = x * 16 + 4, y * 16 + 40
+            if state == 0:
+                screen.blit(tile_hidden, pos)
+            elif state == 2:
+                screen.blit(tile_flag, pos)
+            else:
+                screen.blit(tiles[contents], pos)
 
 
 def draw_mine_count(screen: pygame.Surface):
