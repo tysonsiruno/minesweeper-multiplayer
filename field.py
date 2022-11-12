@@ -138,7 +138,7 @@ def reveal_cell(x: int, y: int) -> bool:
     :return: True if exploded on revealed mine
     TODO: first reveal cannot hit a bomb
     """
-    global _start_time, _game_over, _game_finish_time
+    global _start_time, _game_over, _game_finish_time, _victory
 
     if _game_over or _victory:
         return
@@ -149,8 +149,8 @@ def reveal_cell(x: int, y: int) -> bool:
     if _field[x][y].content == -1:
         if _start_time is not None:
             _field[x][y].content = -2
-            _game_over = True
             _game_finish_time = get_time()
+            _game_over = True
             game_over_reveal()
             return
 
@@ -171,9 +171,8 @@ def reveal_cell(x: int, y: int) -> bool:
 
     if _width * _height - _mine_count == _revealed_count:
         # Victory!
-        global _victory
-        _victory = True
         _game_finish_time = get_time()
+        _victory = True
         victory_flag()
 
 
