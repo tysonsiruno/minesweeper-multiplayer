@@ -180,8 +180,9 @@ def reveal_emply_cell(x: int, y: int):
     global _revealed_count
 
     if _field[x][y].content > 0:
-        _field[x][y].state = 1
-        _revealed_count += 1
+        if _field[x][y].state == 0:
+            _field[x][y].state = 1
+            _revealed_count += 1
         return
 
     visited: set[tuple[int, int]] = set()
@@ -193,8 +194,9 @@ def reveal_emply_cell(x: int, y: int):
         if (x, y) in visited:
             continue
 
-        _field[x][y].state = 1
-        _revealed_count += 1
+        if _field[x][y].state == 0:
+            _field[x][y].state = 1
+            _revealed_count += 1
         visited.add((x, y))
 
         if _field[x][y].content != 0:
