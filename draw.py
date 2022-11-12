@@ -122,7 +122,10 @@ def draw_field(screen: pygame.Surface):
             contents, state = field.get_cell_state(x, y)
             pos = x * 16 + 4, y * 16 + 40
             if state == 0:
-                screen.blit(tile_hidden, pos)
+                if field.is_preview(x, y):
+                    screen.blit(tiles[0], pos)  # preview hidden
+                else:
+                    screen.blit(tile_hidden, pos)  # normal hidden
             elif state == 2:
                 screen.blit(tile_flag, pos)
             else:
