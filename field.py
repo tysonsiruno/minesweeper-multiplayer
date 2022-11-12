@@ -10,7 +10,7 @@ MAX_FIELD_SIZE = 64
 @dataclasses.dataclass
 class Cell:
     content: int  # 0 - no mines around, 8 - 8 mines around, -1 - mine, -2 - exploded mine
-    state: int  # 0 - hidden, 1 - revealed, 2 - flagged
+    state: int  # 0 - hidden, 1 - revealed, 2 - flagged, 3 - false flagged
 
 
 _field: list[list[Cell]] = None
