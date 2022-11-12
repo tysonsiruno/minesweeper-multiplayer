@@ -169,3 +169,8 @@ def draw_face(screen: pygame.Surface):
         screen.blit(face_oh, pos)
     else:
         screen.blit(face_normal, pos)
+
+
+def is_face(x: int, y: int) -> bool:
+    scr_w, _ = _screen.get_size()
+    return scr_w // 2 - 11 <= x < scr_w // 2 + 11 and 7 <= y < 29

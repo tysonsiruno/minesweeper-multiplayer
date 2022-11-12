@@ -48,6 +48,10 @@ def process_input():
                     field.flag_cell(x, y)
                 if event.button == 1:  # preview
                     mouse_left_down = True
+            else:
+                mx, my = pygame.mouse.get_pos()
+                if draw.is_face(mx, my):
+                    start_new_game()
 
         if event.type == pygame.MOUSEBUTTONUP:
             if event.button == 1:
