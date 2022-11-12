@@ -184,8 +184,8 @@ def reveal_emply_cell(x: int, y: int):
         _revealed_count += 1
         return
 
-    visited: set[tuple[int, int]] = {}
-    to_visit: list[tuple[int, int]] = {(x, y)}
+    visited: set[tuple[int, int]] = set()
+    to_visit: list[tuple[int, int]] = [(x, y)]
     while len(to_visit) > 0:
         x, y = to_visit.pop()
         if x < 0 or y < 0 or x >= _width or y >= _height:
