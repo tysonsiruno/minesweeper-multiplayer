@@ -2,6 +2,8 @@ import pygame
 import pygame.display
 import pygame.time
 
+import field
+import draw
 
 FPS = 120
 
@@ -14,13 +16,9 @@ game_over = False
 
 
 def start_new_game():
-    scr_w, scr_h = field_width * 8 + 4 * 2, field_height * 8 + 4 * 2 + 16
-    screen = pygame.display.set_mode((scr_w, scr_h), pygame.SCALED | pygame.RESIZABLE)
+    field.start_game(field_width, field_height, mine_count)
 
-
-def draw_screen(screen):
-
-    pass
+    draw.set_screen(field_width, field_height)
 
 
 def process_input():
@@ -37,17 +35,19 @@ def process_input():
 def main():
     pygame.init()
     pygame.display.set_caption("Minesweeper in Python!")
+    draw.load_assets()
     clock = pygame.time.Clock()
 
-    screen = start_new_game()
+    start_new_game()
 
     while True:
         if process_input():
             break
 
-        draw_screen(screen)
+        draw.draw_screen()
+        pygame.display.flip()
         clock.tick(FPS)
-    pass
+    pygame.quit()
 
 
 if __name__ == '__main__':
