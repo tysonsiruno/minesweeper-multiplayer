@@ -49,6 +49,10 @@ def get_cell_state(x: int, y: int) -> tuple[int, int]:
     return _field[x][y].content, _field[x][y].state
 
 
+def game_won() -> bool:
+    return _victory
+
+
 def game_over() -> bool:
     return _game_over
 

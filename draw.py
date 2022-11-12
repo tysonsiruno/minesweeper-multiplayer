@@ -151,4 +151,7 @@ def draw_face(screen: pygame.Surface):
     pos = scr_w // 2 - 11, 7
     if field.game_over():
         screen.blit(face_dead, pos)
-    screen.blit(face_normal, pos)
+    elif field.game_won():
+        screen.blit(face_cool, pos)
+    else:
+        screen.blit(face_normal, pos)
