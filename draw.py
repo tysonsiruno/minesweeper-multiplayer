@@ -22,6 +22,7 @@ face_dead: Surface
 numbers: list[pygame.Surface]
 tile_hidden: Surface
 tile_flag: Surface
+tile_false_flag: Surface
 tiles: list[pygame.Surface]
 
 
@@ -58,9 +59,10 @@ def load_assets():
         pygame.image.load('assets/number_9.png'),
     ]
 
-    global tile_hidden, tile_flag, tiles
+    global tile_hidden, tile_flag, tile_false_flag, tiles
     tile_hidden = pygame.image.load('assets/tile_hidden.png')
     tile_flag = pygame.image.load('assets/tile_flag.png')
+    tile_false_flag = pygame.image.load('assets/tile_false_flag.png')
     tiles = [
         pygame.image.load('assets/tile_0.png'),
         pygame.image.load('assets/tile_1.png'),
@@ -128,6 +130,8 @@ def draw_field(screen: pygame.Surface):
                     screen.blit(tile_hidden, pos)  # normal hidden
             elif state == 2:
                 screen.blit(tile_flag, pos)
+            elif state == 3:
+                screen.blit(tile_false_flag, pos)
             else:
                 screen.blit(tiles[contents], pos)
 
