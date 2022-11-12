@@ -129,12 +129,18 @@ def draw_field(screen: pygame.Surface):
 
 
 def draw_mine_count(screen: pygame.Surface):
-    ...
+    draw_number(screen, field.get_mines_left(), 9, 9)
 
 
 def draw_timer(screen: pygame.Surface):
-    ...
+    scr_w, _ = screen.get_size()
+    draw_number(screen, field.get_time(), scr_w - 45, 9)
 
 
 def draw_number(screen: pygame.Surface, number: int, x: int, y: int):
-    ...
+    screen.blit(numbers[number % 10], (x + 26, y))
+    if number > 9:
+        screen.blit(numbers[(number // 10) % 10], (x + 13, y))
+    if number > 99:
+        screen.blit(numbers[(number // 100) % 10], (x, y))
+
