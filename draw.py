@@ -81,7 +81,7 @@ _screen: pygame.Surface = None
 
 def set_screen(field_width: int, field_height: int):
     global _screen
-    scr_w, scr_h = field_width * 16 + 4 * 2, field_height * 16 + 4 + 40
+    scr_w, scr_h = field_width * 16 + 4 * 2, field_height * 16 + 44
     _screen = pygame.display.set_mode((scr_w, scr_h), pygame.SCALED | pygame.RESIZABLE)
 
 
