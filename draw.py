@@ -90,6 +90,7 @@ def draw_screen():
     draw_field(_screen)
     draw_mine_count(_screen)
     draw_timer(_screen)
+    draw_face(_screen)
 
 
 def draw_borders(screen: pygame.Surface):
@@ -144,3 +145,10 @@ def draw_number(screen: pygame.Surface, number: int, x: int, y: int):
     if number > 99:
         screen.blit(numbers[(number // 100) % 10], (x, y))
 
+
+def draw_face(screen: pygame.Surface):
+    scr_w, _ = screen.get_size()
+    pos = scr_w // 2 - 11, 7
+    if field.game_over():
+        screen.blit(face_dead, pos)
+    screen.blit(face_normal, pos)
