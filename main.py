@@ -6,14 +6,12 @@ import pygame.mouse
 import field
 import draw
 
-FPS = 120
+# Game settings
+field_width = 16
+field_height = 16
+mine_count = 40
 
-
-field_width = 9
-field_height = 9
-mine_count = 10
-
-game_over = False
+FPS = 60
 mouse_left_down: bool = False
 
 
