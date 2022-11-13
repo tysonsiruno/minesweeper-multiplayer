@@ -257,10 +257,12 @@ def game_over_reveal():
 
 
 def victory_flag():
+    global _flags_count
     for row in _field:
         for cell in row:
             if cell.content == -1:
                 cell.state = 2
+    _flags_count = _mine_count
 
 
 def set_preview(x: int, y: int):
