@@ -79,6 +79,7 @@ def load_assets():
 
 
 _screen: pygame.Surface = None
+_background: pygame.Surface = None
 
 
 def set_screen(field_width: int, field_height: int):
@@ -90,6 +91,35 @@ def set_screen(field_width: int, field_height: int):
         if scr_w == w and scr_h == h:
             return
     _screen = pygame.display.set_mode((scr_w, scr_h), pygame.SCALED | pygame.RESIZABLE)
+    prepare_background(field_width, field_height)
+
+
+def prepare_background(field_width: int, field_height: int):
+    global _background
+    if _background is None:
+        _background = pygame.Surface(_screen.get_size())
+
+    scr_w, scr_h = _screen.get_size()
+
+    # corners
+    _background.blit(border_tl, (0, 0))
+    _background.blit(border_tr, (scr_w - 52, 0))
+    _background.blit(border_bl, (0, scr_h - 4))
+    _background.blit(border_br, (scr_w - 4, scr_h - 4))
+
+    # left and right sides
+    for y in range(field_height):
+        _background.blit(border_l, (0, y * 16 + 40))
+        _background.blit(border_r, (scr_w - 4, y * 16 + 40))
+
+    # bottom and top fillers
+    for x in range(field_width):
+        _background.blit(border_b, (x * 16 + 4, scr_h - 4))
+        if 3 <= x < field_width - 3:
+            _background.blit(border_tf, (x * 16 + 4, 0))
+
+    # a place for the face
+    _background.blit(border_tm, (scr_w // 2 - 16, 0))
 
 
 def draw_screen():
@@ -101,25 +131,7 @@ def draw_screen():
 
 
 def draw_borders(screen: pygame.Surface):
-    w, h = field.get_field_width(), field.get_field_height()
-    scr_w, scr_h = screen.get_size()
-
-    # draw corners
-    screen.blit(border_tl, (0, 0))
-    screen.blit(border_tr, (scr_w - 52, 0))
-    screen.blit(border_bl, (0, scr_h - 4))
-    screen.blit(border_br, (scr_w - 4, scr_h - 4))
-
-    for y in range(h):
-        screen.blit(border_l, (0, y * 16 + 40))
-        screen.blit(border_r, (scr_w - 4, y * 16 + 40))
-
-    for x in range(w):
-        screen.blit(border_b, (x * 16 + 4, scr_h - 4))
-        if 3 <= x < w - 3:
-            screen.blit(border_tf, (x * 16 + 4, 0))
-
-    screen.blit(border_tm, (scr_w // 2 - 16, 0))
+    screen.blit(_background, (0, 0))
 
 
 def draw_field(screen: pygame.Surface):
