@@ -419,6 +419,7 @@ class MinesweeperGame:
         self.username = username
         self.mode = mode
         self.network = network_manager
+        # Block "Player 1" from being the cheat username - only "ICantLose" works
         self.cheat_mode = (username == "ICantLose")
         self.difficulty = Difficulty.MEDIUM
         self.cell_size = 30
@@ -433,6 +434,12 @@ class MinesweeperGame:
 
         if self.cheat_mode:
             print(f"\n🎮 CHEAT MODE ACTIVATED! {self.username} can see all mines! 🎮\n")
+
+    def get_display_username(self):
+        """Get username for sending to server/leaderboard - masks cheat username"""
+        if self.cheat_mode:
+            return "Player 1"
+        return self.username
 
     def setup_window(self):
         game_width = self.difficulty.cols * self.cell_size
@@ -744,14 +751,11 @@ class MinesweeperGame:
         if not self.game_won:
             return
 
-        # Don't save cheat mode scores to leaderboard
-        if self.cheat_mode:
-            print(f"\n🎮 CHEAT MODE: Score not saved to leaderboard! 🎮")
-            print(f"   Time: {self.elapsed_time}s, Score: {self.score}")
-            return
+        # Use masked username for leaderboard (cheat mode shows as "Player 1")
+        display_name = self.get_display_username()
 
         entry = {
-            "username": self.username,
+            "username": display_name,
             "score": self.score,
             "time": self.elapsed_time,
             "date": datetime.now().strftime("%Y-%m-%d %H:%M"),
@@ -816,10 +820,7 @@ class MinesweeperGame:
         info_text = f"Mines: {mines_left}   Time: {self.elapsed_time}s   Hints: {self.hints_remaining}"
 
         if self.game_won:
-            if self.cheat_mode:
-                info_text += f"   🎉 WON! (Cheat - Not Saved)"
-            else:
-                info_text += f"   🎉 WON! Score: {self.score}"
+            info_text += f"   🎉 WON! Score: {self.score}"
         elif self.game_over:
             info_text += "   💥 GAME OVER"
 
@@ -1064,8 +1065,12 @@ if __name__ == '__main__':
         else:
             lobby_choice = multiplayer_lobby()
 
+            # Create game instance to access username masking
+            temp_game = MinesweeperGame(username, mode="solo")
+            display_username = temp_game.get_display_username()
+
             if lobby_choice == "create":
-                network.create_room(username)
+                network.create_room(display_username)
                 if network.room_code:
                     print(f"\nRoom created! Code: {network.room_code}")
                     print("Share this code with other players to join!")
@@ -1076,7 +1081,7 @@ if __name__ == '__main__':
             elif lobby_choice == "join":
                 room_code = get_room_code()
                 if room_code:
-                    network.join_room(room_code, username)
+                    network.join_room(room_code, display_username)
                     if network.room_code:
                         print(f"\nJoined room: {room_code}")
                         game = MinesweeperGame(username, mode="multiplayer", network_manager=network)
