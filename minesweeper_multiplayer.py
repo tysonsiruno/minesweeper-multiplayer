@@ -169,6 +169,7 @@ def choose_game_mode():
 
     choice = None
     running = True
+    clock = pygame.time.Clock()
 
     while running:
         for event in pygame.event.get():
@@ -176,12 +177,19 @@ def choose_game_mode():
                 pygame.quit()
                 exit()
 
-            if solo_btn.handle_event(event):
-                choice = "solo"
-                running = False
-            if multi_btn.handle_event(event):
-                choice = "multiplayer"
-                running = False
+            # Update button hover states
+            if event.type == pygame.MOUSEMOTION:
+                solo_btn.hovered = solo_btn.rect.collidepoint(event.pos)
+                multi_btn.hovered = multi_btn.rect.collidepoint(event.pos)
+
+            # Check for button clicks
+            if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
+                if solo_btn.rect.collidepoint(event.pos):
+                    choice = "solo"
+                    running = False
+                elif multi_btn.rect.collidepoint(event.pos):
+                    choice = "multiplayer"
+                    running = False
 
         screen.fill(BG_COLOR)
 
@@ -195,6 +203,7 @@ def choose_game_mode():
         multi_btn.draw(screen)
 
         pygame.display.flip()
+        clock.tick(60)
 
     return choice
 
@@ -212,6 +221,7 @@ def multiplayer_lobby():
 
     choice = None
     running = True
+    clock = pygame.time.Clock()
 
     while running:
         for event in pygame.event.get():
@@ -219,15 +229,23 @@ def multiplayer_lobby():
                 pygame.quit()
                 exit()
 
-            if create_btn.handle_event(event):
-                choice = "create"
-                running = False
-            if join_btn.handle_event(event):
-                choice = "join"
-                running = False
-            if back_btn.handle_event(event):
-                choice = "back"
-                running = False
+            # Update button hover states
+            if event.type == pygame.MOUSEMOTION:
+                create_btn.hovered = create_btn.rect.collidepoint(event.pos)
+                join_btn.hovered = join_btn.rect.collidepoint(event.pos)
+                back_btn.hovered = back_btn.rect.collidepoint(event.pos)
+
+            # Check for button clicks
+            if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
+                if create_btn.rect.collidepoint(event.pos):
+                    choice = "create"
+                    running = False
+                elif join_btn.rect.collidepoint(event.pos):
+                    choice = "join"
+                    running = False
+                elif back_btn.rect.collidepoint(event.pos):
+                    choice = "back"
+                    running = False
 
         screen.fill(BG_COLOR)
 
@@ -242,6 +260,7 @@ def multiplayer_lobby():
         back_btn.draw(screen)
 
         pygame.display.flip()
+        clock.tick(60)
 
     return choice
 
