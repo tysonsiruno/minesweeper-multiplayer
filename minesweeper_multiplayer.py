@@ -327,15 +327,22 @@ def choose_multiplayer_game_mode():
                 pygame.quit()
                 exit()
 
-            if luck_btn.handle_event(event):
-                choice = "luck"
-                running = False
-            if standard_btn.handle_event(event):
-                choice = "standard"
-                running = False
-            if back_btn.handle_event(event):
-                choice = "back"
-                running = False
+            # Update button hover states
+            luck_btn.handle_event(event)
+            standard_btn.handle_event(event)
+            back_btn.handle_event(event)
+
+            # Check for button clicks
+            if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
+                if luck_btn.rect.collidepoint(event.pos):
+                    choice = "luck"
+                    running = False
+                elif standard_btn.rect.collidepoint(event.pos):
+                    choice = "standard"
+                    running = False
+                elif back_btn.rect.collidepoint(event.pos):
+                    choice = "back"
+                    running = False
 
         screen.fill(BG_COLOR)
 
