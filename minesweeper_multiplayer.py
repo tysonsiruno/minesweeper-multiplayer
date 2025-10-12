@@ -158,7 +158,7 @@ def get_username():
 
 def choose_game_mode():
     """Choose between solo and multiplayer"""
-    screen = pygame.display.set_mode((600, 300))
+    screen = pygame.display.set_mode((600, 350))
     pygame.display.set_caption('Choose Game Mode')
 
     font_large = pygame.font.Font(None, 48)
@@ -166,6 +166,7 @@ def choose_game_mode():
 
     solo_btn = Button(150, 150, 120, 50, "Solo", font_size=32)
     multi_btn = Button(330, 150, 120, 50, "Multiplayer", font_size=24)
+    back_btn = Button(200, 240, 200, 50, "Back", font_size=28)
 
     choice = None
     running = True
@@ -181,6 +182,7 @@ def choose_game_mode():
             if event.type == pygame.MOUSEMOTION:
                 solo_btn.hovered = solo_btn.rect.collidepoint(event.pos)
                 multi_btn.hovered = multi_btn.rect.collidepoint(event.pos)
+                back_btn.hovered = back_btn.rect.collidepoint(event.pos)
 
             # Check for button clicks
             if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
@@ -189,6 +191,9 @@ def choose_game_mode():
                     running = False
                 elif multi_btn.rect.collidepoint(event.pos):
                     choice = "multiplayer"
+                    running = False
+                elif back_btn.rect.collidepoint(event.pos):
+                    choice = "back"
                     running = False
 
         screen.fill(BG_COLOR)
@@ -201,6 +206,7 @@ def choose_game_mode():
         # Draw buttons
         solo_btn.draw(screen)
         multi_btn.draw(screen)
+        back_btn.draw(screen)
 
         pygame.display.flip()
         clock.tick(60)
@@ -1240,57 +1246,74 @@ if __name__ == '__main__':
     print("="*60)
     print()
 
-    username = get_username()
-    print(f"\n🚀 Welcome, {username}!")
+    # Main navigation loop - allows returning to username entry
+    while True:
+        username = get_username()
+        print(f"\n🚀 Welcome, {username}!")
 
-    mode = choose_game_mode()
+        mode = choose_game_mode()
 
-    if mode == "solo":
-        print("Starting solo game...\n")
-        game = MinesweeperGame(username, mode="solo")
-        game.run()
-    else:
-        print("Connecting to multiplayer server...\n")
-        network = NetworkManager()
+        if mode == "back":
+            print("Returning to username entry...")
+            continue
 
-        if not network.connect():
-            print("Failed to connect to server. Starting solo mode instead.")
+        if mode == "solo":
+            print("Starting solo game...\n")
             game = MinesweeperGame(username, mode="solo")
             game.run()
+            break
         else:
-            lobby_choice = multiplayer_lobby()
+            print("Connecting to multiplayer server...\n")
+            network = NetworkManager()
 
-            if lobby_choice == "back":
-                print("Returning to menu...")
+            if not network.connect():
+                print("Failed to connect to server. Starting solo mode instead.")
+                game = MinesweeperGame(username, mode="solo")
+                game.run()
+                break
             else:
-                # Create game instance to access username masking
-                temp_game = MinesweeperGame(username, mode="solo")
-                display_username = temp_game.get_display_username()
+                # Multiplayer lobby loop - allows returning to game mode selection
+                while True:
+                    lobby_choice = multiplayer_lobby()
 
-                if lobby_choice == "create":
-                    # Choose game mode
-                    game_mode_choice = choose_multiplayer_game_mode()
-                    if game_mode_choice == "back":
-                        print("Returning to lobby...")
+                    if lobby_choice == "back":
+                        print("Returning to game mode selection...")
+                        break
                     else:
-                        network.create_room(display_username, game_mode=game_mode_choice)
-                        if network.room_code:
-                            print(f"\nRoom created! Code: {network.room_code}")
-                            print(f"Game Mode: {game_mode_choice.capitalize()}")
-                            print("Share this code with other players to join!")
-                            game = MinesweeperGame(username, mode="multiplayer", network_manager=network)
-                            game.game_mode = game_mode_choice
-                            game.run()
-                        else:
-                            print("Failed to create room.")
-                elif lobby_choice == "join":
-                    room_code = get_room_code()
-                    if room_code:
-                        network.join_room(room_code, display_username)
-                        if network.room_code:
-                            print(f"\nJoined room: {room_code}")
-                            game = MinesweeperGame(username, mode="multiplayer", network_manager=network)
-                            # Game mode will be set from network when game starts
-                            game.run()
-                        else:
-                            print("Failed to join room.")
+                        # Create game instance to access username masking
+                        temp_game = MinesweeperGame(username, mode="solo")
+                        display_username = temp_game.get_display_username()
+
+                        if lobby_choice == "create":
+                            # Game mode selection loop - allows returning to lobby
+                            while True:
+                                game_mode_choice = choose_multiplayer_game_mode()
+                                if game_mode_choice == "back":
+                                    print("Returning to lobby...")
+                                    break
+                                else:
+                                    network.create_room(display_username, game_mode=game_mode_choice)
+                                    if network.room_code:
+                                        print(f"\nRoom created! Code: {network.room_code}")
+                                        print(f"Game Mode: {game_mode_choice.capitalize()}")
+                                        print("Share this code with other players to join!")
+                                        game = MinesweeperGame(username, mode="multiplayer", network_manager=network)
+                                        game.game_mode = game_mode_choice
+                                        game.run()
+                                    else:
+                                        print("Failed to create room.")
+                                    break
+                            break
+                        elif lobby_choice == "join":
+                            room_code = get_room_code()
+                            if room_code:
+                                network.join_room(room_code, display_username)
+                                if network.room_code:
+                                    print(f"\nJoined room: {room_code}")
+                                    game = MinesweeperGame(username, mode="multiplayer", network_manager=network)
+                                    # Game mode will be set from network when game starts
+                                    game.run()
+                                else:
+                                    print("Failed to join room.")
+                            break
+                break
