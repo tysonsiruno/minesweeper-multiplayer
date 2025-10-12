@@ -943,7 +943,7 @@ class MinesweeperGame:
 
         # Draw multiplayer info
         if self.mode == "multiplayer" and self.network:
-            multi_y = self.padding + 95
+            multi_y = self.padding + 100
             if self.network.room_code:
                 room_text = f"Room: {self.network.room_code}  Players: {len(self.network.players)}/3"
                 if self.network.game_started:
@@ -954,10 +954,10 @@ class MinesweeperGame:
                 room_text = "Connecting to room..."
 
             room_surf = self.font_small.render(room_text, True, BUTTON_COLOR)
-            self.screen.blit(room_surf, (self.padding + 160, multi_y + 10))
+            self.screen.blit(room_surf, (self.padding + 160, multi_y))
 
         # Draw game info
-        info_y = self.padding + 130
+        info_y = self.padding + 140
         mines_left = self.difficulty.mines - self.flags_placed
 
         # Add game mode indicator for Luck Mode
@@ -972,7 +972,7 @@ class MinesweeperGame:
                     turn_color = TEXT_COLOR
                 turn_surf = self.font_medium.render(turn_text, True, turn_color)
                 self.screen.blit(turn_surf, (self.padding, info_y))
-                info_y += 25
+                info_y += 28
 
         info_text = f"Mines: {mines_left}   Time: {self.elapsed_time}s   Hints: {self.hints_remaining}"
 
