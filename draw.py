@@ -128,6 +128,8 @@ def draw_screen():
     draw_mine_count(_screen)
     draw_timer(_screen)
     draw_face(_screen)
+    draw_hint_counter(_screen)
+    draw_hint_popup(_screen)
 
 
 def draw_borders(screen: pygame.Surface):
@@ -136,15 +138,26 @@ def draw_borders(screen: pygame.Surface):
 
 def draw_field(screen: pygame.Surface):
     w, h = field.get_field_width(), field.get_field_height()
+    hint_cell = field.get_hint_cell()
+
     for x in range(w):
         for y in range(h):
             contents, state = field.get_cell_state(x, y)
             pos = x * 16 + 4, y * 16 + 40
+
+            # Check if this is the hint cell
+            is_hint = hint_cell is not None and hint_cell == (x, y)
+
             if state == 0:
                 if field.in_preview(x, y):
                     screen.blit(tiles[0], pos)  # preview hidden
                 else:
                     screen.blit(tile_hidden, pos)  # normal hidden
+
+                # Draw hint highlight (yellow border)
+                if is_hint:
+                    hint_rect = pygame.Rect(pos[0], pos[1], 16, 16)
+                    pygame.draw.rect(screen, (255, 255, 0), hint_rect, 2)
             elif state == 2:
                 screen.blit(tile_flag, pos)
             elif state == 3:
@@ -186,3 +199,48 @@ def draw_face(screen: pygame.Surface):
 def is_face(x: int, y: int) -> bool:
     scr_w, _ = _screen.get_size()
     return scr_w // 2 - 11 <= x < scr_w // 2 + 11 and 7 <= y < 29
+
+
+def draw_hint_popup(screen: pygame.Surface):
+    """Draw hint popup when no logical moves are available"""
+    if not field.show_hint_popup():
+        return
+
+    scr_w, scr_h = screen.get_size()
+
+    # Semi-transparent overlay
+    overlay = pygame.Surface((scr_w, scr_h), pygame.SRCALPHA)
+    overlay.fill((0, 0, 0, 128))
+    screen.blit(overlay, (0, 0))
+
+    # Popup box
+    popup_w, popup_h = 200, 100
+    popup_x = (scr_w - popup_w) // 2
+    popup_y = (scr_h - popup_h) // 2
+
+    pygame.draw.rect(screen, (200, 200, 200), (popup_x, popup_y, popup_w, popup_h))
+    pygame.draw.rect(screen, (0, 0, 0), (popup_x, popup_y, popup_w, popup_h), 2)
+
+    # Text
+    font = pygame.font.Font(None, 18)
+    font_small = pygame.font.Font(None, 16)
+
+    text1 = font.render("Sorry! No logical", True, (0, 0, 0))
+    text2 = font.render("moves available.", True, (0, 0, 0))
+    text3 = font_small.render(f"Hints left: {field.get_hints_remaining()}", True, (100, 0, 0))
+    text4 = font_small.render("Use hint? Y/N", True, (0, 0, 100))
+
+    screen.blit(text1, (popup_x + 20, popup_y + 15))
+    screen.blit(text2, (popup_x + 20, popup_y + 32))
+    screen.blit(text3, (popup_x + 45, popup_y + 52))
+    screen.blit(text4, (popup_x + 50, popup_y + 72))
+
+
+def draw_hint_counter(screen: pygame.Surface):
+    """Draw hints remaining counter"""
+    hints = field.get_hints_remaining()
+    if hints > 0:
+        font = pygame.font.Font(None, 14)
+        text = font.render(f"Hints: {hints}", True, (255, 200, 0))
+        scr_w, _ = screen.get_size()
+        screen.blit(text, (scr_w // 2 - 20, 32))

@@ -38,6 +38,17 @@ def process_input():
                 return True
             if event.key == pygame.K_F2:
                 start_new_game()
+            if event.key == pygame.K_h:
+                # Request hint
+                field.use_hint()
+            if event.key == pygame.K_y:
+                # Accept hint
+                if field.show_hint_popup():
+                    field.accept_hint()
+            if event.key == pygame.K_n:
+                # Decline hint
+                if field.show_hint_popup():
+                    field.decline_hint()
 
         if event.type == pygame.MOUSEBUTTONDOWN:
             x, y = get_mouse_pos()
@@ -57,6 +68,10 @@ def process_input():
                 field.clear_preview()
                 x, y = get_mouse_pos()
                 if 0 <= x < field.get_field_width() and 0 <= y < field.get_field_height():
+                    # Clear hint if clicking on hinted cell
+                    hint_cell = field.get_hint_cell()
+                    if hint_cell and hint_cell == (x, y):
+                        field.clear_hint()
                     field.cell_up(x, y)
 
     if mouse_left_down:
@@ -86,6 +101,21 @@ def main():
 
 
 if __name__ == '__main__':
-    print('Welcome!')
+    print('=' * 50)
+    print('Welcome to Minesweeper with Hint System!')
+    print('=' * 50)
+    print('\nControls:')
+    print('  Left Click  - Reveal cell')
+    print('  Right Click - Flag/unflag cell')
+    print('  F2          - New game')
+    print('  H           - Request hint (3 hints per game)')
+    print('  Y/N         - Accept/decline hint when offered')
+    print('\nHint System:')
+    print('  - Press H to request a hint')
+    print('  - If no logical moves available, you\'ll get')
+    print('    a popup offering to use one of your 3 hints')
+    print('  - Safe squares will be highlighted in yellow')
+    print('=' * 50)
+    print()
     main()
     print('Done!')

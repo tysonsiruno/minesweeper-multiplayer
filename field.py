@@ -27,6 +27,12 @@ _game_finish_time: int = None
 
 _preview_pos: tuple[int, int] = None
 
+# Hint system variables
+_hints_remaining: int = 3
+_hint_cell: tuple[int, int] = None
+_show_hint_popup: bool = False
+_hint_popup_timer: float = 0
+
 
 def get_field_width() -> int:
     return _width
@@ -61,7 +67,7 @@ def game_over() -> bool:
 
 
 def start_game(width: int, height: int, mine_count: int):
-    global _width, _height, _field, _mine_count, _flags_count, _revealed_count, _start_time, _victory, _game_over, _game_finish_time, _preview_pos
+    global _width, _height, _field, _mine_count, _flags_count, _revealed_count, _start_time, _victory, _game_over, _game_finish_time, _preview_pos, _hints_remaining, _hint_cell, _show_hint_popup, _hint_popup_timer
 
     if width < MIN_FIELD_SIZE or height < MIN_FIELD_SIZE:
         raise ValueError(f'Requested field size is too small.\nMinimum dimension is {MIN_FIELD_SIZE}')
@@ -94,6 +100,10 @@ def start_game(width: int, height: int, mine_count: int):
     _victory = _game_over = False
     _start_time = _game_finish_time = None
     _preview_pos = None
+    _hints_remaining = 3
+    _hint_cell = None
+    _show_hint_popup = False
+    _hint_popup_timer = 0
 
 
 def iter_neighbors(x: int, y: int) -> Iterable[tuple[int, int]]:
@@ -296,3 +306,155 @@ def is_preview():
     if _game_over or _victory:
         return
     return _preview_pos is not None
+
+
+# Hint system functions
+def get_hints_remaining() -> int:
+    return _hints_remaining
+
+
+def get_hint_cell() -> tuple[int, int]:
+    return _hint_cell
+
+
+def clear_hint():
+    global _hint_cell
+    _hint_cell = None
+
+
+def show_hint_popup() -> bool:
+    return _show_hint_popup
+
+
+def set_hint_popup(show: bool):
+    global _show_hint_popup, _hint_popup_timer
+    _show_hint_popup = show
+    if show:
+        _hint_popup_timer = time.monotonic()
+
+
+def update_hint_popup():
+    global _show_hint_popup
+    if _show_hint_popup and time.monotonic() - _hint_popup_timer > 0.1:  # Check frequently
+        pass  # Keep showing until user responds
+
+
+def has_logical_moves() -> bool:
+    """Check if there are any safe logical moves available"""
+    if _game_over or _victory or _start_time is None:
+        return True  # Game not started or finished
+
+    # Check for cells that can be logically determined
+    for x in range(_width):
+        for y in range(_height):
+            cell = _field[x][y]
+
+            # Skip if not revealed or is a mine
+            if cell.state != 1 or cell.content <= 0:
+                continue
+
+            # Count neighbors
+            hidden_neighbors = []
+            flagged_count = 0
+
+            for nx, ny in iter_neighbors(x, y):
+                neighbor = _field[nx][ny]
+                if neighbor.state == 2:  # Flagged
+                    flagged_count += 1
+                elif neighbor.state == 0:  # Hidden
+                    hidden_neighbors.append((nx, ny))
+
+            # If all mines are flagged and there are hidden cells, those are safe
+            if flagged_count == cell.content and len(hidden_neighbors) > 0:
+                return True
+
+            # If remaining hidden cells equals remaining mines, all are mines
+            remaining_mines = cell.content - flagged_count
+            if remaining_mines == len(hidden_neighbors) and remaining_mines > 0:
+                return True
+
+    return False
+
+
+def find_safe_hint() -> tuple[int, int]:
+    """Find a safe cell to reveal as a hint"""
+    # First, look for cells that are logically safe
+    for x in range(_width):
+        for y in range(_height):
+            cell = _field[x][y]
+
+            # Skip if not revealed or is a mine
+            if cell.state != 1 or cell.content <= 0:
+                continue
+
+            # Count neighbors
+            hidden_neighbors = []
+            flagged_count = 0
+
+            for nx, ny in iter_neighbors(x, y):
+                neighbor = _field[nx][ny]
+                if neighbor.state == 2:  # Flagged
+                    flagged_count += 1
+                elif neighbor.state == 0:  # Hidden
+                    hidden_neighbors.append((nx, ny))
+
+            # If all mines are flagged, hidden neighbors are safe
+            if flagged_count == cell.content and len(hidden_neighbors) > 0:
+                # Return a safe cell that isn't a mine
+                for hx, hy in hidden_neighbors:
+                    if _field[hx][hy].content >= 0:  # Not a mine
+                        return (hx, hy)
+
+    # If no logical move, find any safe unrevealed cell
+    safe_cells = []
+    for x in range(_width):
+        for y in range(_height):
+            if _field[x][y].state == 0 and _field[x][y].content >= 0:
+                safe_cells.append((x, y))
+
+    if safe_cells:
+        return random.choice(safe_cells)
+
+    return None
+
+
+def use_hint():
+    """Use a hint - directly highlight a safe cell"""
+    global _hints_remaining, _hint_cell
+
+    if _game_over or _victory or _start_time is None:
+        return False
+
+    if _hints_remaining <= 0:
+        return False
+
+    # Find and highlight a safe cell
+    safe_cell = find_safe_hint()
+    if safe_cell:
+        _hint_cell = safe_cell
+        _hints_remaining -= 1
+        return True
+
+    return False
+
+
+def accept_hint():
+    """Accept the hint and highlight a safe cell"""
+    global _hints_remaining, _hint_cell
+
+    if _hints_remaining <= 0:
+        return False
+
+    safe_cell = find_safe_hint()
+    if safe_cell:
+        _hint_cell = safe_cell
+        _hints_remaining -= 1
+        set_hint_popup(False)
+        return True
+
+    return False
+
+
+def decline_hint():
+    """Decline the hint offer"""
+    set_hint_popup(False)
