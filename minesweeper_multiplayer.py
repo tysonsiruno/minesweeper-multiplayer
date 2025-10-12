@@ -305,6 +305,65 @@ def get_room_code():
 
     return text if text else None
 
+def choose_multiplayer_game_mode():
+    """Choose between Luck Mode and Standard Mode for multiplayer"""
+    screen = pygame.display.set_mode((700, 500))
+    pygame.display.set_caption('Choose Multiplayer Mode')
+
+    font_large = pygame.font.Font(None, 48)
+    font_medium = pygame.font.Font(None, 24)
+    font_small = pygame.font.Font(None, 18)
+
+    luck_btn = Button(150, 200, 180, 60, "Luck Mode", font_size=28)
+    standard_btn = Button(370, 200, 180, 60, "Standard Mode", font_size=24)
+    back_btn = Button(250, 420, 200, 50, "Back", font_size=28)
+
+    choice = None
+    running = True
+
+    while running:
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                pygame.quit()
+                exit()
+
+            if luck_btn.handle_event(event):
+                choice = "luck"
+                running = False
+            if standard_btn.handle_event(event):
+                choice = "standard"
+                running = False
+            if back_btn.handle_event(event):
+                choice = "back"
+                running = False
+
+        screen.fill(BG_COLOR)
+
+        # Title
+        title = font_large.render('Choose Game Mode', True, TEXT_COLOR)
+        title_rect = title.get_rect(center=(350, 50))
+        screen.blit(title, title_rect)
+
+        # Draw buttons
+        luck_btn.draw(screen)
+        standard_btn.draw(screen)
+        back_btn.draw(screen)
+
+        # Descriptions
+        luck_desc1 = font_small.render("Turn-based: One click per turn", True, TEXT_COLOR)
+        luck_desc2 = font_small.render("No numbers shown - pure luck!", True, TEXT_COLOR)
+        screen.blit(luck_desc1, (150, 270))
+        screen.blit(luck_desc2, (150, 290))
+
+        standard_desc1 = font_small.render("Race Mode: Normal minesweeper", True, TEXT_COLOR)
+        standard_desc2 = font_small.render("First to finish wins!", True, TEXT_COLOR)
+        screen.blit(standard_desc1, (370, 270))
+        screen.blit(standard_desc2, (370, 290))
+
+        pygame.display.flip()
+
+    return choice
+
 class NetworkManager:
     def __init__(self):
         self.sio = socketio.Client()
@@ -313,6 +372,9 @@ class NetworkManager:
         self.players = []
         self.game_started = False
         self.board_seed = None
+        self.game_mode = "standard"  # "standard" or "luck"
+        self.current_turn = None  # For Luck Mode: username of player whose turn it is
+        self.game_result = None  # "won", "lost", or None
 
         # Setup event handlers
         self.setup_handlers()
@@ -351,7 +413,9 @@ class NetworkManager:
         def on_game_start(data):
             self.game_started = True
             self.board_seed = data['board_seed']
-            print("Game starting!")
+            self.game_mode = data.get('game_mode', 'standard')
+            self.current_turn = data.get('current_turn')
+            print(f"Game starting! Mode: {self.game_mode}")
 
         @self.sio.on('player_action')
         def on_player_action(data):
@@ -365,6 +429,28 @@ class NetworkManager:
         @self.sio.on('game_ended')
         def on_game_ended(data):
             print("Game ended! Results:", data['results'])
+            # Set game result based on position
+            results = data['results']
+            my_username = [p['username'] for p in self.players if p['session_id'] == self.sio.sid]
+            if my_username:
+                my_username = my_username[0]
+                if results[0]['username'] == my_username:
+                    self.game_result = "won"
+                else:
+                    self.game_result = "lost"
+
+        @self.sio.on('turn_changed')
+        def on_turn_changed(data):
+            """Handle turn change in Luck Mode"""
+            self.current_turn = data['current_turn']
+            print(f"Turn changed to: {self.current_turn}")
+
+        @self.sio.on('player_eliminated')
+        def on_player_eliminated(data):
+            """Handle player elimination in Luck Mode"""
+            print(f"Player {data['username']} was eliminated!")
+            if data.get('winner'):
+                self.game_result = "won" if data['winner'] == player_sessions.get(self.sio.sid, {}).get('username') else "lost"
 
         @self.sio.on('error')
         def on_error(data):
@@ -383,12 +469,14 @@ class NetworkManager:
         if self.connected:
             self.sio.disconnect()
 
-    def create_room(self, username, difficulty="Medium"):
+    def create_room(self, username, difficulty="Medium", game_mode="standard"):
         self.sio.emit('create_room', {
             "username": username,
             "difficulty": difficulty,
-            "max_players": 3
+            "max_players": 3,
+            "game_mode": game_mode
         })
+        self.game_mode = game_mode
         time.sleep(0.5)  # Wait for response
 
     def join_room(self, room_code, username):
@@ -426,6 +514,8 @@ class MinesweeperGame:
         self.top_panel_height = 180  # Increased for multiplayer info
         self.right_panel_width = 250
         self.padding = 20
+        self.game_mode = "standard"  # "standard" or "luck"
+        self.show_game_result = False  # Show win/loss screen overlay
 
         self.setup_window()
         self.load_leaderboard()
@@ -581,6 +671,12 @@ class MinesweeperGame:
         if cell.is_revealed or cell.is_flagged:
             return
 
+        # In Luck Mode multiplayer, check if it's your turn
+        if self.mode == "multiplayer" and self.network and self.game_mode == "luck":
+            display_username = self.get_display_username()
+            if self.network.current_turn and self.network.current_turn != display_username:
+                return  # Not your turn
+
         # CHEAT MODE: Prevent clicking on mines
         if self.cheat_mode and cell.is_mine:
             return
@@ -595,19 +691,30 @@ class MinesweeperGame:
 
         if cell.is_mine:
             self.game_over = True
-            self.reveal_all_mines()
+            # In Luck Mode, you lose immediately
+            if self.game_mode == "luck":
+                if self.mode == "multiplayer" and self.network:
+                    self.network.send_action("eliminated", row, col)
+            else:
+                self.reveal_all_mines()
             return
 
         # Send action to network if multiplayer
         if self.mode == "multiplayer" and self.network and self.network.game_started:
             self.network.send_action("reveal", row, col)
 
-        if cell.adjacent_mines == 0:
-            for dr in [-1, 0, 1]:
-                for dc in [-1, 0, 1]:
-                    if dr == 0 and dc == 0:
-                        continue
-                    self.reveal_cell(row + dr, col + dc)
+        # In Luck Mode, only reveal one cell (no flood fill)
+        if self.game_mode == "luck":
+            # Don't flood fill in Luck Mode
+            pass
+        else:
+            # Standard mode: flood fill if no adjacent mines
+            if cell.adjacent_mines == 0:
+                for dr in [-1, 0, 1]:
+                    for dc in [-1, 0, 1]:
+                        if dr == 0 and dc == 0:
+                            continue
+                        self.reveal_cell(row + dr, col + dc)
 
         self.check_win()
 
@@ -817,6 +924,21 @@ class MinesweeperGame:
         # Draw game info
         info_y = self.padding + 130
         mines_left = self.difficulty.mines - self.flags_placed
+
+        # Add game mode indicator for Luck Mode
+        if self.game_mode == "luck" and self.mode == "multiplayer" and self.network:
+            display_username = self.get_display_username()
+            if self.network.current_turn:
+                if self.network.current_turn == display_username:
+                    turn_text = "🎯 YOUR TURN!"
+                    turn_color = HINT_COLOR
+                else:
+                    turn_text = f"⏳ {self.network.current_turn}'s turn"
+                    turn_color = TEXT_COLOR
+                turn_surf = self.font_medium.render(turn_text, True, turn_color)
+                self.screen.blit(turn_surf, (self.padding, info_y))
+                info_y += 25
+
         info_text = f"Mines: {mines_left}   Time: {self.elapsed_time}s   Hints: {self.hints_remaining}"
 
         if self.game_won:
@@ -848,7 +970,8 @@ class MinesweeperGame:
                     if cell.is_mine:
                         pygame.draw.circle(self.screen, MINE_COLOR,
                                          rect.center, self.cell_size // 4)
-                    elif cell.adjacent_mines > 0:
+                    elif cell.adjacent_mines > 0 and self.game_mode != "luck":
+                        # Only show numbers in Standard Mode
                         color = NUMBER_COLORS[cell.adjacent_mines]
                         text = self.font_medium.render(str(cell.adjacent_mines), True, color)
                         text_rect = text.get_rect(center=rect.center)
@@ -876,6 +999,10 @@ class MinesweeperGame:
 
         # Draw leaderboard panel
         self.draw_leaderboard()
+
+        # Draw win/loss overlay if in multiplayer Standard Mode
+        if self.mode == "multiplayer" and self.network and self.network.game_result:
+            self.draw_game_result_overlay()
 
         pygame.display.flip()
 
@@ -961,6 +1088,40 @@ class MinesweeperGame:
                 no_scores_rect = no_scores.get_rect(centerx=panel_x + panel_width // 2)
                 self.screen.blit(no_scores, (no_scores_rect.x, panel_y + 100))
 
+    def draw_game_result_overlay(self):
+        """Draw win/loss overlay for multiplayer games"""
+        # Semi-transparent overlay
+        overlay = pygame.Surface((self.width, self.height))
+        overlay.set_alpha(200)
+        overlay.fill((0, 0, 0))
+        self.screen.blit(overlay, (0, 0))
+
+        # Result text
+        if self.network.game_result == "won":
+            result_text = "YOU WIN!"
+            result_color = (46, 204, 113)  # Green
+            emoji = "🎉"
+        else:
+            result_text = "Ur Cooked"
+            result_color = (231, 76, 60)  # Red
+            emoji = "💀"
+
+        # Draw result
+        font_huge = pygame.font.Font(None, 96)
+        result_surf = font_huge.render(result_text, True, result_color)
+        result_rect = result_surf.get_rect(center=(self.width // 2, self.height // 2 - 50))
+        self.screen.blit(result_surf, result_rect)
+
+        # Draw emoji
+        emoji_surf = font_huge.render(emoji, True, TEXT_COLOR)
+        emoji_rect = emoji_surf.get_rect(center=(self.width // 2, self.height // 2 + 50))
+        self.screen.blit(emoji_surf, emoji_rect)
+
+        # Instructions
+        inst_surf = self.font_medium.render("Press ESC to exit", True, TEXT_COLOR)
+        inst_rect = inst_surf.get_rect(center=(self.width // 2, self.height // 2 + 150))
+        self.screen.blit(inst_surf, inst_rect)
+
     def run(self):
         clock = pygame.time.Clock()
         running = True
@@ -980,6 +1141,11 @@ class MinesweeperGame:
 
                 self.draw()
                 clock.tick(60)
+
+            # Sync game mode from network
+            if self.network.game_started:
+                self.game_mode = self.network.game_mode
+                print(f"Game started in {self.game_mode} mode")
 
         while running:
             for event in pygame.event.get():
@@ -1065,28 +1231,37 @@ if __name__ == '__main__':
         else:
             lobby_choice = multiplayer_lobby()
 
-            # Create game instance to access username masking
-            temp_game = MinesweeperGame(username, mode="solo")
-            display_username = temp_game.get_display_username()
-
-            if lobby_choice == "create":
-                network.create_room(display_username)
-                if network.room_code:
-                    print(f"\nRoom created! Code: {network.room_code}")
-                    print("Share this code with other players to join!")
-                    game = MinesweeperGame(username, mode="multiplayer", network_manager=network)
-                    game.run()
-                else:
-                    print("Failed to create room.")
-            elif lobby_choice == "join":
-                room_code = get_room_code()
-                if room_code:
-                    network.join_room(room_code, display_username)
-                    if network.room_code:
-                        print(f"\nJoined room: {room_code}")
-                        game = MinesweeperGame(username, mode="multiplayer", network_manager=network)
-                        game.run()
-                    else:
-                        print("Failed to join room.")
-            else:
+            if lobby_choice == "back":
                 print("Returning to menu...")
+            else:
+                # Create game instance to access username masking
+                temp_game = MinesweeperGame(username, mode="solo")
+                display_username = temp_game.get_display_username()
+
+                if lobby_choice == "create":
+                    # Choose game mode
+                    game_mode_choice = choose_multiplayer_game_mode()
+                    if game_mode_choice == "back":
+                        print("Returning to lobby...")
+                    else:
+                        network.create_room(display_username, game_mode=game_mode_choice)
+                        if network.room_code:
+                            print(f"\nRoom created! Code: {network.room_code}")
+                            print(f"Game Mode: {game_mode_choice.capitalize()}")
+                            print("Share this code with other players to join!")
+                            game = MinesweeperGame(username, mode="multiplayer", network_manager=network)
+                            game.game_mode = game_mode_choice
+                            game.run()
+                        else:
+                            print("Failed to create room.")
+                elif lobby_choice == "join":
+                    room_code = get_room_code()
+                    if room_code:
+                        network.join_room(room_code, display_username)
+                        if network.room_code:
+                            print(f"\nJoined room: {room_code}")
+                            game = MinesweeperGame(username, mode="multiplayer", network_manager=network)
+                            # Game mode will be set from network when game starts
+                            game.run()
+                        else:
+                            print("Failed to join room.")

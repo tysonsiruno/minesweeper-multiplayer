@@ -129,6 +129,7 @@ def handle_create_room(data):
     username = data.get("username", "Player")
     difficulty = data.get("difficulty", "Medium")
     max_players = data.get("max_players", 3)
+    game_mode = data.get("game_mode", "standard")
 
     room_code = generate_room_code()
 
@@ -137,15 +138,18 @@ def handle_create_room(data):
         "host": username,
         "difficulty": difficulty,
         "max_players": max_players,
+        "game_mode": game_mode,
         "status": "waiting",
         "players": [{
             "username": username,
             "session_id": request.sid,
             "ready": False,
             "score": 0,
-            "finished": False
+            "finished": False,
+            "eliminated": False
         }],
         "board_seed": secrets.randbelow(1000000),
+        "current_turn": username if game_mode == "luck" else None,
         "created_at": datetime.now().isoformat()
     }
 
@@ -159,10 +163,11 @@ def handle_create_room(data):
     emit('room_created', {
         "room_code": room_code,
         "difficulty": difficulty,
-        "max_players": max_players
+        "max_players": max_players,
+        "game_mode": game_mode
     })
 
-    print(f"Room {room_code} created by {username}")
+    print(f"Room {room_code} created by {username} (mode: {game_mode})")
 
 @socketio.on('join_room')
 def handle_join_room(data):
@@ -190,7 +195,8 @@ def handle_join_room(data):
         "session_id": request.sid,
         "ready": False,
         "score": 0,
-        "finished": False
+        "finished": False,
+        "eliminated": False
     })
 
     player_sessions[request.sid] = {
@@ -278,6 +284,8 @@ def handle_player_ready(data):
         emit('game_start', {
             "difficulty": room["difficulty"],
             "board_seed": room["board_seed"],
+            "game_mode": room["game_mode"],
+            "current_turn": room.get("current_turn"),
             "players": room["players"]
         }, room=room_code)
 
@@ -293,13 +301,73 @@ def handle_game_action(data):
     if room_code not in game_rooms:
         return
 
+    room = game_rooms[room_code]
+    action = data.get("action")
+
+    # Handle elimination in Luck Mode
+    if action == "eliminated" and room["game_mode"] == "luck":
+        # Mark player as eliminated
+        for player in room["players"]:
+            if player["session_id"] == request.sid:
+                player["eliminated"] = True
+                break
+
+        # Check if only one player remains
+        active_players = [p for p in room["players"] if not p["eliminated"]]
+        if len(active_players) == 1:
+            winner = active_players[0]
+            emit('player_eliminated', {
+                "username": session["username"],
+                "winner": winner["username"]
+            }, room=room_code)
+            room["status"] = "finished"
+        else:
+            emit('player_eliminated', {
+                "username": session["username"]
+            }, room=room_code)
+
+            # Move to next player's turn
+            current_idx = next((i for i, p in enumerate(room["players"]) if p["username"] == room["current_turn"]), 0)
+            next_idx = (current_idx + 1) % len(room["players"])
+
+            # Find next non-eliminated player
+            attempts = 0
+            while room["players"][next_idx]["eliminated"] and attempts < len(room["players"]):
+                next_idx = (next_idx + 1) % len(room["players"])
+                attempts += 1
+
+            if attempts < len(room["players"]):
+                room["current_turn"] = room["players"][next_idx]["username"]
+                emit('turn_changed', {
+                    "current_turn": room["current_turn"]
+                }, room=room_code)
+        return
+
     # Broadcast action to other players in room
     emit('player_action', {
         "username": session["username"],
-        "action": data.get("action"),
+        "action": action,
         "row": data.get("row"),
         "col": data.get("col")
     }, room=room_code, skip_sid=request.sid)
+
+    # In Luck Mode, change turn after reveal action
+    if room["game_mode"] == "luck" and action == "reveal":
+        # Find next player
+        current_idx = next((i for i, p in enumerate(room["players"]) if p["username"] == room["current_turn"]), 0)
+        next_idx = (current_idx + 1) % len(room["players"])
+
+        # Find next non-eliminated player
+        attempts = 0
+        while room["players"][next_idx].get("eliminated", False) and attempts < len(room["players"]):
+            next_idx = (next_idx + 1) % len(room["players"])
+            attempts += 1
+
+        if attempts < len(room["players"]):
+            room["current_turn"] = room["players"][next_idx]["username"]
+            emit('turn_changed', {
+                "current_turn": room["current_turn"]
+            }, room=room_code)
 
 @socketio.on('game_finished')
 def handle_game_finished(data):
