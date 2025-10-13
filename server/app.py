@@ -11,9 +11,13 @@ from flask_cors import CORS
 from datetime import datetime
 import json
 
-# Get paths
+# Get paths - handle both local and Railway deployment
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+# Check if web is sibling to server (local) or if we're in server dir (Railway)
 WEB_DIR = os.path.join(os.path.dirname(BASE_DIR), 'web')
+if not os.path.exists(WEB_DIR):
+    # Try relative to current directory (Railway with rootDir: server)
+    WEB_DIR = os.path.abspath(os.path.join(BASE_DIR, '..', 'web'))
 
 app = Flask(__name__, static_folder=WEB_DIR, static_url_path='')
 app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', secrets.token_hex(16))
