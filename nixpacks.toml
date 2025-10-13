@@ -1,8 +1,13 @@
 [phases.setup]
-nixPkgs = ["python311"]
+nixPkgs = ["python311", "pip"]
 
 [phases.install]
-cmds = ["pip install -r server/requirements.txt"]
+cmds = [
+  "python3.11 -m venv /opt/venv",
+  ". /opt/venv/bin/activate",
+  "pip install --upgrade pip",
+  "pip install -r server/requirements.txt"
+]
 
 [start]
-cmd = "cd server && gunicorn --worker-class eventlet -w 1 --bind 0.0.0.0:$PORT app:app"
+cmd = ". /opt/venv/bin/activate && cd server && gunicorn --worker-class eventlet -w 1 --bind 0.0.0.0:$PORT app:app"
