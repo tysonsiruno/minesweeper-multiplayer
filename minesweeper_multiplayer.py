@@ -40,8 +40,8 @@ NUMBER_COLORS = {
     8: (44, 62, 80)     # Darker gray
 }
 
-# Server configuration (will be replaced with Render URL)
-SERVER_URL = os.environ.get('SERVER_URL', 'http://localhost:5000')
+# Server configuration - Railway deployment
+SERVER_URL = os.environ.get('SERVER_URL', 'https://minesweeper-server-production-ecec.up.railway.app')
 
 class Difficulty(Enum):
     EASY = ("Easy", 9, 9, 10)
