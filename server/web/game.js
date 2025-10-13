@@ -26,6 +26,7 @@ const state = {
     flagsPlaced: 0,
     hintsRemaining: 3,
     hintCell: null,
+    hoverCell: null, // Track cell under cursor
     score: 0,
     timerInterval: null,
     tilesClicked: 0, // Track tiles clicked for new scoring system
@@ -49,6 +50,14 @@ const state = {
 document.addEventListener('DOMContentLoaded', () => {
     setupEventListeners();
     initCanvas();
+
+    // Recalculate canvas size on window resize
+    window.addEventListener('resize', () => {
+        if (state.currentScreen === 'game-screen') {
+            initCanvas();
+            drawBoard();
+        }
+    });
 });
 
 function setupEventListeners() {
@@ -140,6 +149,64 @@ function setupEventListeners() {
     const canvas = document.getElementById('game-canvas');
     canvas.addEventListener('click', handleCanvasClick);
     canvas.addEventListener('contextmenu', handleCanvasRightClick);
+
+    // Mouse hover effect
+    canvas.addEventListener('mousemove', (e) => {
+        const rect = canvas.getBoundingClientRect();
+        const x = e.clientX - rect.left;
+        const y = e.clientY - rect.top;
+
+        const col = Math.floor(x / state.cellSize);
+        const row = Math.floor(y / state.cellSize);
+
+        // Only update if hover cell changed
+        if (!state.hoverCell || state.hoverCell.row !== row || state.hoverCell.col !== col) {
+            state.hoverCell = { row, col };
+            drawBoard();
+        }
+    });
+
+    canvas.addEventListener('mouseleave', () => {
+        state.hoverCell = null;
+        drawBoard();
+    });
+
+    // Touch events for mobile
+    let touchStartTime = 0;
+    let touchStartPos = null;
+
+    canvas.addEventListener('touchstart', (e) => {
+        e.preventDefault();
+        touchStartTime = Date.now();
+        const touch = e.touches[0];
+        const rect = canvas.getBoundingClientRect();
+        touchStartPos = {
+            x: touch.clientX - rect.left,
+            y: touch.clientY - rect.top
+        };
+    });
+
+    canvas.addEventListener('touchend', (e) => {
+        e.preventDefault();
+        if (!touchStartPos) return;
+
+        const touchDuration = Date.now() - touchStartTime;
+        const col = Math.floor(touchStartPos.x / state.cellSize);
+        const row = Math.floor(touchStartPos.y / state.cellSize);
+
+        if (touchDuration > 500) {
+            // Long press = flag
+            toggleFlag(row, col);
+        } else {
+            // Quick tap = reveal
+            if (!state.gameOver && state.hintCell && state.hintCell.row === row && state.hintCell.col === col) {
+                state.hintCell = null;
+            }
+            revealCell(row, col);
+        }
+
+        touchStartPos = null;
+    });
 
     // Keyboard shortcuts
     document.addEventListener('keydown', (e) => {
@@ -485,6 +552,18 @@ function updateTurnIndicator() {
 // Game Logic
 function initCanvas() {
     const canvas = document.getElementById('game-canvas');
+
+    // Calculate responsive cell size based on screen size
+    const maxWidth = Math.min(window.innerWidth - 40, 600);  // 20px padding each side, max 600px
+    const maxHeight = Math.min(window.innerHeight - 300, 600);  // Leave room for UI, max 600px
+
+    // Calculate cell size that fits screen
+    const cellSizeByWidth = Math.floor(maxWidth / state.difficulty.cols);
+    const cellSizeByHeight = Math.floor(maxHeight / state.difficulty.rows);
+
+    // Use the smaller dimension to ensure it fits, with min 15px and max 40px
+    state.cellSize = Math.max(15, Math.min(cellSizeByWidth, cellSizeByHeight, 40));
+
     const width = state.difficulty.cols * state.cellSize;
     const height = state.difficulty.rows * state.cellSize;
     canvas.width = width;
@@ -932,7 +1011,12 @@ function drawBoard() {
             if (cell.isRevealed) {
                 ctx.fillStyle = '#ecf0f1';
             } else {
-                ctx.fillStyle = '#95a5a6';
+                // Hover effect for unrevealed cells
+                if (state.hoverCell && state.hoverCell.row === row && state.hoverCell.col === col && !state.gameOver) {
+                    ctx.fillStyle = '#7f8c8d';
+                } else {
+                    ctx.fillStyle = '#95a5a6';
+                }
             }
             ctx.fillRect(x, y, state.cellSize - 1, state.cellSize - 1);
 
@@ -978,15 +1062,23 @@ function updateStats() {
     const minesLeft = state.difficulty.mines - state.flagsPlaced;
     document.getElementById('mines-left').textContent = `Mines: ${minesLeft}`;
     document.getElementById('hints-left').textContent = `Hints: ${state.hintsRemaining}`;
-    // Update timer display to show clicks instead
-    document.getElementById('timer').textContent = `Clicks: ${state.tilesClicked}`;
+
+    // Show time and clicks
+    if (state.startTime && !state.gameOver) {
+        const elapsed = Math.floor((Date.now() - state.startTime) / 1000);
+        const minutes = Math.floor(elapsed / 60);
+        const seconds = elapsed % 60;
+        const timeStr = `${minutes}:${seconds.toString().padStart(2, '0')}`;
+        document.getElementById('timer').textContent = `⏱️ ${timeStr} | Clicks: ${state.tilesClicked}`;
+    } else {
+        document.getElementById('timer').textContent = `Clicks: ${state.tilesClicked}`;
+    }
 }
 
 function updateTimer() {
     if (state.startTime && !state.gameOver) {
         state.elapsedTime = Math.floor((Date.now() - state.startTime) / 1000);
-        // Display clicks instead of time
-        document.getElementById('timer').textContent = `Clicks: ${state.tilesClicked}`;
+        updateStats(); // Update display with current time
     }
 }
 
@@ -1119,6 +1211,13 @@ function displayGlobalLeaderboard(scores) {
 }
 
 function quitGame() {
+    // Confirm before quitting if game is in progress
+    if (state.startTime && !state.gameOver) {
+        if (!confirm('Are you sure you want to quit? Your progress will be lost.')) {
+            return;
+        }
+    }
+
     if (state.timerInterval) clearInterval(state.timerInterval);
 
     if (state.mode === 'multiplayer') {

@@ -173,6 +173,28 @@ input[type="text"]:focus {
     opacity: 0.9;
 }
 
+/* Color-coded difficulty levels */
+.mode-card[data-difficulty="easy"] h2 {
+    color: #2ecc71;
+}
+
+.mode-card[data-difficulty="medium"] h2 {
+    color: #f1c40f;
+}
+
+.mode-card[data-difficulty="hard"] h2 {
+    color: #e67e22;
+}
+
+.mode-card[data-difficulty="impossible"] h2 {
+    color: #e74c3c;
+}
+
+.mode-card[data-difficulty="hacker"] h2 {
+    color: #9b59b6;
+    text-shadow: 0 0 10px rgba(155, 89, 182, 0.5);
+}
+
 /* Room Info */
 .room-info {
     background: rgba(102, 126, 234, 0.3);
