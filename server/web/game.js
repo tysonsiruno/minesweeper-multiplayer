@@ -232,7 +232,7 @@ function startSoloGame(gameMode = 'standard') {
     } else if (gameMode === 'survival') {
         document.getElementById('leaderboard-title').textContent = 'Survival - Level 1';
     } else {
-        document.getElementById('leaderboard-title').textContent = 'Solo Play';
+        document.getElementById('leaderboard-title').textContent = 'Standard';
     }
 
     resetGame();
