@@ -323,6 +323,19 @@ input[type="text"]:focus {
     margin-top: 20px;
 }
 
+.game-controls .btn {
+    color: #333;
+    font-weight: 600;
+}
+
+.game-controls .btn-primary {
+    color: white;
+}
+
+.game-controls .btn-secondary {
+    color: white;
+}
+
 /* Result Overlay */
 .overlay {
     display: none;
