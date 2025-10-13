@@ -237,6 +237,7 @@ function startSoloGame(gameMode = 'standard') {
 
     resetGame();
     updateTurnIndicator(); // Show turn indicator for special modes
+    loadLeaderboard(); // Load leaderboard for this game mode
 }
 
 function showMultiplayerLobby() {
@@ -575,8 +576,6 @@ function revealCell(row, col) {
     }
 
     cell.isRevealed = true;
-    state.tilesClicked++; // Increment click counter
-    state.totalGameClicks++; // Track total for multiplayer
 
     if (state.firstClick) {
         state.firstClick = false;
@@ -651,6 +650,10 @@ function revealCell(row, col) {
         }
         return;
     }
+
+    // Only count safe tiles (not mines) for scoring
+    state.tilesClicked++;
+    state.totalGameClicks++;
 
     // Send action to server if multiplayer
     if (state.mode === 'multiplayer' && state.gameStarted) {
@@ -996,6 +999,74 @@ function showGameResult(won, score, customMessage) {
 
     resultScore.textContent = score > 0 ? `Tiles Clicked: ${score}` : '';
     overlay.classList.add('active');
+
+    // Submit score to leaderboard for solo games
+    if (state.mode === 'solo' && score > 0) {
+        submitScoreToBackend(won, score);
+    }
+}
+
+// Leaderboard Backend Integration
+async function submitScoreToBackend(won, score) {
+    try {
+        const response = await fetch(`${SERVER_URL}/api/leaderboard/submit`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                username: state.displayUsername,
+                score: score,
+                time: state.elapsedTime,
+                difficulty: state.gameMode, // Use gameMode as difficulty filter
+                hints_used: 3 - state.hintsRemaining,
+                won: won
+            })
+        });
+        const data = await response.json();
+        console.log('Score submitted to leaderboard:', data);
+    } catch (error) {
+        console.error('Failed to submit score to leaderboard:', error);
+    }
+}
+
+async function loadLeaderboard() {
+    if (state.mode === 'solo') {
+        try {
+            const response = await fetch(
+                `${SERVER_URL}/api/leaderboard/global?difficulty=${state.gameMode}`
+            );
+            const data = await response.json();
+            displaySoloLeaderboard(data.leaderboard);
+        } catch (error) {
+            console.error('Failed to load leaderboard:', error);
+        }
+    }
+}
+
+function displaySoloLeaderboard(scores) {
+    const leaderboard = document.getElementById('leaderboard');
+    leaderboard.innerHTML = '';
+
+    if (scores.length === 0) {
+        leaderboard.innerHTML = '<p style="color: #666; text-align: center; padding: 20px;">No scores yet. Be the first!</p>';
+        return;
+    }
+
+    scores.slice(0, 10).forEach((entry, index) => {
+        const div = document.createElement('div');
+        div.className = 'leaderboard-entry';
+
+        // Add medal for top 3
+        let medal = '';
+        if (index === 0) medal = '🥇 ';
+        else if (index === 1) medal = '🥈 ';
+        else if (index === 2) medal = '🥉 ';
+
+        div.innerHTML = `
+            <span>${medal}${index + 1}. ${entry.username}</span>
+            <span>${entry.score} tiles</span>
+        `;
+        leaderboard.appendChild(div);
+    });
 }
 
 function quitGame() {
