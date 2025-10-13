@@ -35,6 +35,7 @@ const state = {
     timebombDifficulty: 'medium', // 'easy', 'medium', 'hard', 'impossible', 'hacker'
     timeRemaining: 60, // Countdown timer
     timebombStartTime: { easy: 90, medium: 60, hard: 45, impossible: 30, hacker: 20 },
+    timebombTimeBonus: { easy: 1.0, medium: 0.5, hard: 0.2, impossible: 0.05, hacker: 0.01 }, // Seconds per tile
 
     // Survival mode variables
     survivalLevel: 1,
@@ -167,10 +168,41 @@ function submitUsername() {
 
     // ICantLose cheat: Mask the username for display purposes
     if (username.toLowerCase() === 'icantlose') {
-        // Generate a random cool username
-        const coolNames = ['CoolPlayer', 'ProGamer', 'Ninja', 'Legend', 'Champion', 'Master', 'Ace', 'Boss'];
-        const randomSuffix = Math.floor(Math.random() * 1000);
-        state.displayUsername = coolNames[Math.floor(Math.random() * coolNames.length)] + randomSuffix;
+        // Toxic/cocky usernames
+        const toxicNames = [
+            'RUEVNTRYNG?', 'EZWIN', 'UshouldPracticeMore', 'uhhhhisthatit?',
+            'TooEZ4Me', 'GetGoodKid', 'NiceAttemptTho', 'IsThisEasyMode?',
+            'YallTryingRight?', 'LiterallyAFK', 'OneHandedBTW', 'DidntEvenTry',
+            'WasThatSupposedToBeHard', 'ImNotEvenWarmedUp', 'zzzzz',
+            'WakeUpPeople', 'ThisIsTrainingMode?', 'CanIGetASmurf',
+            'MyGrandmaBetter', 'PlayingWithFeet', 'MiceOnlyChallenge',
+            'FirstTimeAndWhat', 'AmIPlayingBots?', 'YallSeriousRN',
+            'TryHarderNextTime', 'LaggedForThat', 'AlmostHadMe',
+            'NiceWarmup', 'BackToTutorial', 'UninstallPls', 'Outplayed',
+            'SkillDiff', 'TouchGrassMaybe', 'GGNoRe', 'ThanksForTheWin',
+            'StillLearning?', 'BetterLuckNextGame', 'ICarriedTbh',
+            'SoloQueueThings', 'NeedAHandicap?', 'YawnFest',
+            'WhatsMinesweeper', 'JustClickedRandom', 'BlindPlaythrough',
+            'ControllerDisconnected', 'WrongGameBro', 'CasualPlayers',
+            'WhereTheChallenge', 'ThisWasRanked?', 'FreeElo',
+            'NoSweatGG', 'HowYouLoseThat', 'MustBeLagging', 'Built Different',
+            'WasEatingBTW', 'PhoneInOtherHand', 'WatchingNetflix',
+            'TabbledOut', 'MyDogPlayingRN', 'AutoPilotMode',
+            'CantBelieveYouTried', 'NoCompetition', 'FreeLobby',
+            'WhereTheSkilled1s', 'ThisTheMainEvent?', 'DefinitelyNotTrying',
+            'CanILeaveYet', 'ThatsAllYouGot?', 'ExpectedMore',
+            'BackToTheMenu', 'NextVictimPls', 'SpeedrunningLife',
+            'ClickClickWin', 'WhyYouMad?', 'SomeoneSalty?', 'StayMadKid',
+            'CryAboutIt', 'CopeHarder', 'Malding', 'BigMad',
+            'ActuallyEZ', 'NotEvenClose', 'DominatedLOL', 'Stomped',
+            'DestroyedYou', 'ClappedCheeks', 'GetRekt', 'Demolished',
+            'Bodied', 'Destroyed', 'Annihilated', 'Wrecked',
+            'RanThrough', 'DiffedHard', 'GapIsHuge', 'MilesAhead',
+            'NotMyLevel', 'OutOfYourLeague', 'DifferentTier', 'SmurfingUnranked',
+            'HowYouThisBad', 'UseTutorial', 'PracticeVsBots', 'WatchAGuide',
+            'LearnTheGame', 'StopEmbarrassing', 'DeleteTheGame', 'TryAnotherGame'
+        ];
+        state.displayUsername = toxicNames[Math.floor(Math.random() * toxicNames.length)];
     } else {
         state.displayUsername = username;
     }
@@ -559,9 +591,9 @@ function revealCell(row, col) {
         placeMines(row, col);
     }
 
-    // Time Bomb: Add +3 seconds for revealing safe tile (not for cheat username)
+    // Time Bomb: Add time bonus for revealing safe tile (not for cheat username)
     if (state.gameMode === 'timebomb' && !cell.isMine && state.username.toLowerCase() !== 'icantlose') {
-        state.timeRemaining += 3;
+        state.timeRemaining += state.timebombTimeBonus[state.timebombDifficulty];
         updateTurnIndicator();
     }
 
