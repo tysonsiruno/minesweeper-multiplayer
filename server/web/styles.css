@@ -104,12 +104,15 @@ input[type="text"]:focus {
 }
 
 .btn-secondary {
-    background: rgba(255, 255, 255, 0.2);
-    color: white;
+    background: rgba(255, 255, 255, 0.25);
+    color: #333;
+    text-shadow: none;
+    font-weight: 700;
 }
 
 .btn-secondary:hover {
-    background: rgba(255, 255, 255, 0.3);
+    background: rgba(255, 255, 255, 0.4);
+    color: #222;
 }
 
 .btn-large {
