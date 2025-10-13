@@ -651,7 +651,7 @@ function revealCell(row, col, isUserClick = true) {
         if (state.mode === 'solo') {
             // Show level reached in Survival mode
             if (state.gameMode === 'survival') {
-                setTimeout(() => showGameResult(false, state.score, `Level ${state.survivalLevel} Complete!`), 500);
+                setTimeout(() => showGameResult(false, state.score, `Died on Level ${state.survivalLevel}`), 500);
             } else {
                 setTimeout(() => showGameResult(false, state.score), 500);
             }
