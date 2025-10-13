@@ -130,7 +130,8 @@ def handle_disconnect():
             # Notify other players
             emit('player_left', {
                 "username": session["username"],
-                "players_remaining": len(room["players"])
+                "players_remaining": len(room["players"]),
+                "players": room["players"]
             }, room=room_code)
 
             # Delete room if empty
@@ -256,7 +257,8 @@ def handle_leave_room():
         emit('left_room', {"success": True})
         emit('player_left', {
             "username": session["username"],
-            "players_remaining": len(room["players"])
+            "players_remaining": len(room["players"]),
+            "players": room["players"]
         }, room=room_code)
 
         # Delete room if empty
@@ -294,8 +296,8 @@ def handle_player_ready(data):
         "all_ready": all_ready
     }, room=room_code)
 
-    # Start game if all ready
-    if all_ready and len(room["players"]) >= 1:
+    # Start game if all ready (need at least 2 players for multiplayer)
+    if all_ready and len(room["players"]) >= 2:
         room["status"] = "playing"
         emit('game_start', {
             "difficulty": room["difficulty"],
@@ -431,6 +433,7 @@ def handle_game_finished(data):
             player["ready"] = False
             player["score"] = 0
             player["finished"] = False
+            player["eliminated"] = False
 
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))

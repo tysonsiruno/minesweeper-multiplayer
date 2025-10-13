@@ -130,7 +130,7 @@ function setupEventListeners() {
 
     // Game controls
     document.getElementById('hint-btn').addEventListener('click', useHint);
-    document.getElementById('new-game-btn').addEventListener('click', resetGame);
+    document.getElementById('new-game-btn').addEventListener('click', handleNewGame);
     document.getElementById('quit-btn').addEventListener('click', quitGame);
     document.getElementById('result-ok-btn').addEventListener('click', () => {
         document.getElementById('result-overlay').classList.remove('active');
@@ -282,6 +282,9 @@ function connectToServer() {
     });
 
     state.socket.on('player_left', (data) => {
+        if (data.players) {
+            state.players = data.players;
+        }
         updatePlayersList();
     });
 
@@ -318,8 +321,8 @@ function connectToServer() {
 
     state.socket.on('game_ended', (data) => {
         const results = data.results;
-        const myResult = results.find(p => p.username === state.username);
-        const won = results[0].username === state.username;
+        const myResult = results.find(p => p.username === state.displayUsername);
+        const won = results[0].username === state.displayUsername;
         showGameResult(won, myResult ? myResult.score : 0);
     });
 
@@ -398,6 +401,11 @@ function leaveRoom() {
     state.socket.emit('leave_room', {});
     state.roomCode = null;
     state.players = [];
+
+    // Re-enable ready button for next room
+    document.getElementById('ready-btn').disabled = false;
+    document.getElementById('ready-btn').textContent = 'Ready';
+
     showScreen('lobby-screen');
 }
 
@@ -415,15 +423,24 @@ function startMultiplayerGame(boardSeed) {
     else if (state.gameMode === 'standard') modeTitle = 'Standard Race';
     document.getElementById('leaderboard-title').textContent = modeTitle;
 
-    // Seed random for consistent board
-    Math.seedrandom = (seed) => {
+    // Seed random for consistent board across players
+    const seededRandom = (() => {
         const m = 2 ** 35 - 31;
         const a = 185852;
-        let s = seed % m;
+        let s = boardSeed % m;
         return () => (s = s * a % m) / m;
-    };
+    })();
+
+    // Override Math.random for this game
+    const originalRandom = Math.random;
+    Math.random = seededRandom;
 
     resetGame();
+
+    // Restore original Math.random after board generation
+    setTimeout(() => {
+        Math.random = originalRandom;
+    }, 100);
     updateTurnIndicator();
     loadGlobalLeaderboard(); // Load global leaderboard for this mode
 }
@@ -448,7 +465,7 @@ function updateTurnIndicator() {
             indicator.className = 'turn-indicator';
             indicator.style.display = 'block';
         } else if (state.currentTurn) {
-            if (state.currentTurn === state.username) {
+            if (state.currentTurn === state.displayUsername) {
                 indicator.textContent = '🎯 YOUR TURN!';
                 indicator.className = 'turn-indicator';
                 indicator.style.display = 'block';
@@ -470,6 +487,25 @@ function initCanvas() {
     const height = state.difficulty.rows * state.cellSize;
     canvas.width = width;
     canvas.height = height;
+}
+
+function handleNewGame() {
+    // New Game button only works in solo mode
+    if (state.mode === 'multiplayer') {
+        alert('Cannot start new game in multiplayer. Please return to lobby.');
+        return;
+    }
+
+    // In survival mode, reset to level 1
+    if (state.gameMode === 'survival') {
+        state.survivalLevel = 1;
+        state.survivalTotalTiles = 0;
+        state.survivalMineCount = state.survivalBaseMines;
+        state.difficulty.mines = state.survivalBaseMines;
+        document.getElementById('leaderboard-title').textContent = 'Survival - Level 1';
+    }
+
+    resetGame();
 }
 
 function resetGame() {
@@ -497,15 +533,8 @@ function resetGame() {
         }
     }
 
-    // Initialize Survival mode
+    // Initialize Survival mode (only set mines, level is handled by handleNewGame or advanceSurvivalLevel)
     if (state.gameMode === 'survival') {
-        // Reset to level 1 only if this is a fresh game (not a level progression)
-        if (!state.survivalLevel || state.survivalLevel === 1) {
-            state.survivalLevel = 1;
-            state.survivalTotalTiles = 0;
-            state.survivalMineCount = state.survivalBaseMines;
-        }
-        // Update difficulty to use survival mine count
         state.difficulty.mines = state.survivalMineCount;
     }
 
@@ -823,6 +852,12 @@ function calculateScore() {
 
 function useHint() {
     if (state.gameOver || !state.startTime || state.hintsRemaining <= 0) return;
+
+    // Hints don't work in Luck Mode since numbers are hidden
+    if (state.gameMode === 'luck') {
+        alert('Hints are not available in Russian Roulette mode!');
+        return;
+    }
 
     const safeCells = [];
     for (let row = 0; row < state.difficulty.rows; row++) {
