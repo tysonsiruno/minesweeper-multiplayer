@@ -451,7 +451,9 @@ function updateTurnIndicator() {
     if (state.gameMode === 'timebomb') {
         // Show countdown timer for Time Bomb mode
         const timeClass = state.timeRemaining <= 10 ? 'time-critical' : '';
-        indicator.textContent = `⏰ TIME: ${state.timeRemaining}s`;
+        // Format time to 1 decimal place to avoid floating point precision errors
+        const displayTime = state.timeRemaining.toFixed(1);
+        indicator.textContent = `⏰ TIME: ${displayTime}s`;
         indicator.className = `turn-indicator ${timeClass}`;
         indicator.style.display = 'block';
     } else if (state.gameMode === 'survival') {
