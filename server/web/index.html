@@ -69,14 +69,56 @@
                         <button class="btn btn-primary select-mode">Select</button>
                     </div>
                     <div class="mode-card" data-mode="luck">
-                        <h2>Luck Mode</h2>
+                        <h2>Russian Roulette</h2>
                         <p>Turn-based gameplay</p>
                         <p>One click per turn</p>
                         <p>No numbers shown!</p>
                         <button class="btn btn-primary select-mode">Select</button>
                     </div>
+                    <div class="mode-card" data-mode="timebomb">
+                        <h2>⏰ Time Bomb</h2>
+                        <p>Race against time!</p>
+                        <p>+3s per tile revealed</p>
+                        <p>Don't let timer hit 0!</p>
+                        <button class="btn btn-primary select-mode">Select</button>
+                    </div>
                 </div>
                 <button id="back-to-lobby2" class="btn btn-secondary">Back</button>
+            </div>
+        </div>
+
+        <!-- Time Bomb Difficulty Selection -->
+        <div id="timebomb-difficulty-screen" class="screen">
+            <div class="container">
+                <h1>⏰ Time Bomb - Choose Difficulty</h1>
+                <div class="mode-cards">
+                    <div class="mode-card" data-difficulty="easy">
+                        <h2>Easy</h2>
+                        <p>90 seconds start time</p>
+                        <button class="btn btn-primary select-difficulty">Select</button>
+                    </div>
+                    <div class="mode-card" data-difficulty="medium">
+                        <h2>Medium</h2>
+                        <p>60 seconds start time</p>
+                        <button class="btn btn-primary select-difficulty">Select</button>
+                    </div>
+                    <div class="mode-card" data-difficulty="hard">
+                        <h2>Hard</h2>
+                        <p>45 seconds start time</p>
+                        <button class="btn btn-primary select-difficulty">Select</button>
+                    </div>
+                    <div class="mode-card" data-difficulty="impossible">
+                        <h2>Impossible</h2>
+                        <p>30 seconds start time</p>
+                        <button class="btn btn-primary select-difficulty">Select</button>
+                    </div>
+                    <div class="mode-card" data-difficulty="hacker">
+                        <h2>🔥 Hacker</h2>
+                        <p>20 seconds start time</p>
+                        <button class="btn btn-primary select-difficulty">Select</button>
+                    </div>
+                </div>
+                <button id="back-to-gamemode" class="btn btn-secondary">Back</button>
             </div>
         </div>
 

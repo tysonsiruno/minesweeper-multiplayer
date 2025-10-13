@@ -4,8 +4,9 @@ const SERVER_URL = 'https://minesweeper-server-production-ecec.up.railway.app';
 // Game State
 const state = {
     username: '',
+    displayUsername: '', // Display name (masked for ICantLose cheat)
     mode: 'solo', // 'solo' or 'multiplayer'
-    gameMode: 'standard', // 'standard' or 'luck'
+    gameMode: 'standard', // 'standard', 'luck', 'timebomb', 'survival'
     currentScreen: 'username-screen',
     socket: null,
     roomCode: null,
@@ -28,7 +29,12 @@ const state = {
     score: 0,
     timerInterval: null,
     tilesClicked: 0, // Track tiles clicked for new scoring system
-    totalGameClicks: 0 // For multiplayer: total clicks from all players
+    totalGameClicks: 0, // For multiplayer: total clicks from all players
+
+    // Time Bomb mode variables
+    timebombDifficulty: 'medium', // 'easy', 'medium', 'hard', 'impossible', 'hacker'
+    timeRemaining: 60, // Countdown timer
+    timebombStartTime: { easy: 90, medium: 60, hard: 45, impossible: 30, hacker: 20 }
 };
 
 // Initialize
@@ -68,6 +74,13 @@ function setupEventListeners() {
     document.querySelectorAll('.select-mode').forEach(btn => {
         btn.addEventListener('click', (e) => {
             const mode = e.target.closest('.mode-card').dataset.mode;
+
+            // Time Bomb mode needs difficulty selection first
+            if (mode === 'timebomb') {
+                showScreen('timebomb-difficulty-screen');
+                return;
+            }
+
             // Check if we're in solo or multiplayer flow
             if (state.socket && state.socket.connected) {
                 createRoom(mode);
@@ -83,6 +96,24 @@ function setupEventListeners() {
         } else {
             showScreen('mode-screen');
         }
+    });
+
+    // Time Bomb difficulty selection
+    document.querySelectorAll('.select-difficulty').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            const difficulty = e.target.closest('.mode-card').dataset.difficulty;
+            state.timebombDifficulty = difficulty;
+
+            // Check if we're in solo or multiplayer flow
+            if (state.socket && state.socket.connected) {
+                createRoom('timebomb');
+            } else {
+                startSoloGame('timebomb');
+            }
+        });
+    });
+    document.getElementById('back-to-gamemode').addEventListener('click', () => {
+        showScreen('gamemode-screen');
     });
 
     // Waiting room
@@ -126,6 +157,17 @@ function submitUsername() {
     }
 
     state.username = username;
+
+    // ICantLose cheat: Mask the username for display purposes
+    if (username.toLowerCase() === 'icantlose') {
+        // Generate a random cool username
+        const coolNames = ['CoolPlayer', 'ProGamer', 'Ninja', 'Legend', 'Champion', 'Master', 'Ace', 'Boss'];
+        const randomSuffix = Math.floor(Math.random() * 1000);
+        state.displayUsername = coolNames[Math.floor(Math.random() * coolNames.length)] + randomSuffix;
+    } else {
+        state.displayUsername = username;
+    }
+
     showScreen('mode-screen');
 }
 
@@ -133,11 +175,20 @@ function startSoloGame(gameMode = 'standard') {
     state.mode = 'solo';
     state.gameMode = gameMode;
     showScreen('game-screen');
-    document.getElementById('username-display').textContent = state.username;
+    document.getElementById('username-display').textContent = state.displayUsername;
     document.getElementById('room-display').textContent = '';
-    document.getElementById('leaderboard-title').textContent = gameMode === 'luck' ? 'Luck Mode' : 'Solo Play';
+
+    // Set title based on game mode
+    if (gameMode === 'luck') {
+        document.getElementById('leaderboard-title').textContent = 'Russian Roulette';
+    } else if (gameMode === 'timebomb') {
+        document.getElementById('leaderboard-title').textContent = `Time Bomb - ${state.timebombDifficulty.toUpperCase()}`;
+    } else {
+        document.getElementById('leaderboard-title').textContent = 'Solo Play';
+    }
+
     resetGame();
-    updateTurnIndicator(); // Show turn indicator for solo luck mode
+    updateTurnIndicator(); // Show turn indicator for special modes
 }
 
 function showMultiplayerLobby() {
@@ -246,7 +297,7 @@ function disconnectSocket() {
 
 function createRoom(gameMode) {
     state.socket.emit('create_room', {
-        username: state.username,
+        username: state.displayUsername, // Use display name for multiplayer
         difficulty: 'Medium',
         max_players: 3,
         game_mode: gameMode
@@ -263,7 +314,7 @@ function joinRoom() {
 
     state.socket.emit('join_room', {
         room_code: roomCode,
-        username: state.username
+        username: state.displayUsername // Use display name for multiplayer
     });
 }
 
@@ -304,7 +355,7 @@ function leaveRoom() {
 function startMultiplayerGame(boardSeed) {
     state.mode = 'multiplayer';
     showScreen('game-screen');
-    document.getElementById('username-display').textContent = state.username;
+    document.getElementById('username-display').textContent = state.displayUsername;
     document.getElementById('room-display').textContent = `Room: ${state.roomCode}`;
     document.getElementById('leaderboard-title').textContent = 'Race Standings';
 
@@ -322,16 +373,26 @@ function startMultiplayerGame(boardSeed) {
 
 function updateTurnIndicator() {
     const indicator = document.getElementById('turn-indicator');
-    if (state.gameMode === 'luck') {
+
+    if (state.gameMode === 'timebomb') {
+        // Show countdown timer for Time Bomb mode
+        const timeClass = state.timeRemaining <= 10 ? 'time-critical' : '';
+        indicator.textContent = `⏰ TIME: ${state.timeRemaining}s`;
+        indicator.className = `turn-indicator ${timeClass}`;
+        indicator.style.display = 'block';
+    } else if (state.gameMode === 'luck') {
         if (state.mode === 'solo') {
-            indicator.textContent = '🎲 Luck Mode - No Numbers!';
+            indicator.textContent = '🎲 Russian Roulette - No Numbers!';
+            indicator.className = 'turn-indicator';
             indicator.style.display = 'block';
         } else if (state.currentTurn) {
             if (state.currentTurn === state.username) {
                 indicator.textContent = '🎯 YOUR TURN!';
+                indicator.className = 'turn-indicator';
                 indicator.style.display = 'block';
             } else {
                 indicator.textContent = `⏳ ${state.currentTurn}'s turn`;
+                indicator.className = 'turn-indicator';
                 indicator.style.display = 'block';
             }
         }
@@ -365,6 +426,15 @@ function resetGame() {
 
     if (state.timerInterval) clearInterval(state.timerInterval);
 
+    // Initialize Time Bomb mode countdown
+    if (state.gameMode === 'timebomb') {
+        state.timeRemaining = state.timebombStartTime[state.timebombDifficulty];
+        // ICantLose cheat: infinite time
+        if (state.username.toLowerCase() === 'icantlose') {
+            state.timeRemaining = 9999;
+        }
+    }
+
     // Initialize board
     for (let row = 0; row < state.difficulty.rows; row++) {
         state.board[row] = [];
@@ -380,6 +450,7 @@ function resetGame() {
 
     updateStats();
     drawBoard();
+    updateTurnIndicator();
 }
 
 function placeMines(excludeRow, excludeCol) {
@@ -445,8 +516,20 @@ function revealCell(row, col) {
     if (state.firstClick) {
         state.firstClick = false;
         state.startTime = Date.now();
-        state.timerInterval = setInterval(updateTimer, 1000);
+
+        // Start appropriate timer based on game mode
+        if (state.gameMode === 'timebomb') {
+            state.timerInterval = setInterval(updateTimeBombTimer, 1000);
+        } else {
+            state.timerInterval = setInterval(updateTimer, 1000);
+        }
         placeMines(row, col);
+    }
+
+    // Time Bomb: Add +3 seconds for revealing safe tile (not for cheat username)
+    if (state.gameMode === 'timebomb' && !cell.isMine && state.username.toLowerCase() !== 'icantlose') {
+        state.timeRemaining += 3;
+        updateTurnIndicator();
     }
 
     if (cell.isMine) {
@@ -493,8 +576,15 @@ function toggleFlag(row, col) {
     const cell = state.board[row][col];
     if (cell.isRevealed) return;
 
+    const wasFlagged = cell.isFlagged;
     cell.isFlagged = !cell.isFlagged;
     state.flagsPlaced += cell.isFlagged ? 1 : -1;
+
+    // Time Bomb: Add +1 second for placing flag (not removing, not for cheat username)
+    if (state.gameMode === 'timebomb' && cell.isFlagged && !wasFlagged && state.username.toLowerCase() !== 'icantlose') {
+        state.timeRemaining += 1;
+        updateTurnIndicator();
+    }
 
     if (state.mode === 'multiplayer' && state.gameStarted) {
         state.socket.emit('game_action', { action: 'flag', row, col });
@@ -680,6 +770,24 @@ function updateTimer() {
         state.elapsedTime = Math.floor((Date.now() - state.startTime) / 1000);
         // Display clicks instead of time
         document.getElementById('timer').textContent = `Clicks: ${state.tilesClicked}`;
+    }
+}
+
+function updateTimeBombTimer() {
+    if (state.gameOver) return;
+
+    // Countdown timer for Time Bomb mode
+    state.timeRemaining--;
+    updateTurnIndicator();
+
+    // Time's up! Game over
+    if (state.timeRemaining <= 0) {
+        state.gameOver = true;
+        state.timeRemaining = 0;
+        revealAllMines();
+        calculateScore();
+        drawBoard();
+        setTimeout(() => showGameResult(false, state.score, 'Time\'s Up!'), 500);
     }
 }
 
