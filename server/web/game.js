@@ -1059,9 +1059,9 @@ function drawBoard() {
 }
 
 function updateStats() {
-    const minesLeft = state.difficulty.mines - state.flagsPlaced;
-    document.getElementById('mines-left').textContent = `Mines: ${minesLeft}`;
-    document.getElementById('hints-left').textContent = `Hints: ${state.hintsRemaining}`;
+    // Show flags placed vs total mines - more intuitive than "mines left"
+    document.getElementById('mines-left').textContent = `🚩 Flags: ${state.flagsPlaced}/${state.difficulty.mines}`;
+    document.getElementById('hints-left').textContent = `💡 Hints: ${state.hintsRemaining}`;
 
     // Show time and clicks
     if (state.startTime && !state.gameOver) {
@@ -1134,7 +1134,25 @@ function showGameResult(won, score, customMessage) {
         resultEmoji.textContent = '💥';
     }
 
-    resultScore.textContent = score > 0 ? `Tiles Clicked: ${score}` : '';
+    // Show detailed game stats
+    const minutes = Math.floor(state.elapsedTime / 60);
+    const seconds = state.elapsedTime % 60;
+    const timeStr = `${minutes}:${seconds.toString().padStart(2, '0')}`;
+
+    // Calculate accuracy (safe clicks / total clicks)
+    const totalSafeTiles = (state.difficulty.rows * state.difficulty.cols) - state.difficulty.mines;
+    const accuracy = state.tilesClicked > 0 ? Math.round((state.tilesClicked / totalSafeTiles) * 100) : 0;
+
+    resultScore.innerHTML = `
+        <div style="margin: 20px 0; line-height: 1.8;">
+            <div><strong>Tiles Clicked:</strong> ${score}</div>
+            <div><strong>Time Taken:</strong> ${timeStr}</div>
+            <div><strong>Flags Placed:</strong> ${state.flagsPlaced}/${state.difficulty.mines}</div>
+            <div><strong>Hints Used:</strong> ${3 - state.hintsRemaining}/3</div>
+            ${won ? `<div><strong>Completion:</strong> ${accuracy}%</div>` : ''}
+        </div>
+    `;
+
     overlay.classList.add('active');
 
     // Submit score to leaderboard for solo games
