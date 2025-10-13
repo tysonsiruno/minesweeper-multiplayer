@@ -26,7 +26,9 @@ const state = {
     hintsRemaining: 3,
     hintCell: null,
     score: 0,
-    timerInterval: null
+    timerInterval: null,
+    tilesClicked: 0, // Track tiles clicked for new scoring system
+    totalGameClicks: 0 // For multiplayer: total clicks from all players
 };
 
 // Initialize
@@ -43,7 +45,7 @@ function setupEventListeners() {
     });
 
     // Mode selection
-    document.getElementById('solo-btn').addEventListener('click', () => startSoloGame());
+    document.getElementById('solo-btn').addEventListener('click', () => showScreen('gamemode-screen'));
     document.getElementById('multiplayer-btn').addEventListener('click', () => showMultiplayerLobby());
     document.getElementById('back-to-username').addEventListener('click', () => showScreen('username-screen'));
 
@@ -66,10 +68,22 @@ function setupEventListeners() {
     document.querySelectorAll('.select-mode').forEach(btn => {
         btn.addEventListener('click', (e) => {
             const mode = e.target.closest('.mode-card').dataset.mode;
-            createRoom(mode);
+            // Check if we're in solo or multiplayer flow
+            if (state.socket && state.socket.connected) {
+                createRoom(mode);
+            } else {
+                startSoloGame(mode);
+            }
         });
     });
-    document.getElementById('back-to-lobby2').addEventListener('click', () => showScreen('lobby-screen'));
+    document.getElementById('back-to-lobby2').addEventListener('click', () => {
+        // Back to lobby if multiplayer, otherwise back to mode selection
+        if (state.socket && state.socket.connected) {
+            showScreen('lobby-screen');
+        } else {
+            showScreen('mode-screen');
+        }
+    });
 
     // Waiting room
     document.getElementById('ready-btn').addEventListener('click', markReady);
@@ -115,14 +129,15 @@ function submitUsername() {
     showScreen('mode-screen');
 }
 
-function startSoloGame() {
+function startSoloGame(gameMode = 'standard') {
     state.mode = 'solo';
-    state.gameMode = 'standard';
+    state.gameMode = gameMode;
     showScreen('game-screen');
     document.getElementById('username-display').textContent = state.username;
     document.getElementById('room-display').textContent = '';
-    document.getElementById('leaderboard-title').textContent = 'Local Stats';
+    document.getElementById('leaderboard-title').textContent = gameMode === 'luck' ? 'Luck Mode' : 'Solo Play';
     resetGame();
+    updateTurnIndicator(); // Show turn indicator for solo luck mode
 }
 
 function showMultiplayerLobby() {
@@ -185,6 +200,10 @@ function connectToServer() {
     state.socket.on('player_action', (data) => {
         // Handle other players' actions
         console.log(`Player ${data.username} performed action: ${data.action}`);
+        // Increment total clicks for multiplayer scoring
+        if (data.action === 'reveal') {
+            state.totalGameClicks++;
+        }
     });
 
     state.socket.on('turn_changed', (data) => {
@@ -303,13 +322,18 @@ function startMultiplayerGame(boardSeed) {
 
 function updateTurnIndicator() {
     const indicator = document.getElementById('turn-indicator');
-    if (state.gameMode === 'luck' && state.currentTurn) {
-        if (state.currentTurn === state.username) {
-            indicator.textContent = '🎯 YOUR TURN!';
+    if (state.gameMode === 'luck') {
+        if (state.mode === 'solo') {
+            indicator.textContent = '🎲 Luck Mode - No Numbers!';
             indicator.style.display = 'block';
-        } else {
-            indicator.textContent = `⏳ ${state.currentTurn}'s turn`;
-            indicator.style.display = 'block';
+        } else if (state.currentTurn) {
+            if (state.currentTurn === state.username) {
+                indicator.textContent = '🎯 YOUR TURN!';
+                indicator.style.display = 'block';
+            } else {
+                indicator.textContent = `⏳ ${state.currentTurn}'s turn`;
+                indicator.style.display = 'block';
+            }
         }
     } else {
         indicator.style.display = 'none';
@@ -336,6 +360,8 @@ function resetGame() {
     state.hintsRemaining = 3;
     state.hintCell = null;
     state.score = 0;
+    state.tilesClicked = 0;
+    state.totalGameClicks = 0;
 
     if (state.timerInterval) clearInterval(state.timerInterval);
 
@@ -413,6 +439,8 @@ function revealCell(row, col) {
     }
 
     cell.isRevealed = true;
+    state.tilesClicked++; // Increment click counter
+    state.totalGameClicks++; // Track total for multiplayer
 
     if (state.firstClick) {
         state.firstClick = false;
@@ -424,22 +452,26 @@ function revealCell(row, col) {
     if (cell.isMine) {
         state.gameOver = true;
         revealAllMines();
+        calculateScore(); // Calculate score based on clicks
 
         if (state.mode === 'multiplayer' && state.gameMode === 'luck') {
-            state.socket.emit('game_action', { action: 'eliminated', row, col });
+            state.socket.emit('game_action', { action: 'eliminated', row, col, clicks: state.tilesClicked });
         }
 
         drawBoard();
         if (state.mode === 'solo') {
-            setTimeout(() => showGameResult(false, 0), 500);
+            setTimeout(() => showGameResult(false, state.score), 500);
         }
         return;
     }
 
     // Send action to server if multiplayer
     if (state.mode === 'multiplayer' && state.gameStarted) {
-        state.socket.emit('game_action', { action: 'reveal', row, col });
+        state.socket.emit('game_action', { action: 'reveal', row, col, clicks: state.tilesClicked });
     }
+
+    // Update stats display
+    updateStats();
 
     // Flood fill if no adjacent mines (not in Luck Mode)
     if (state.gameMode !== 'luck' && cell.adjacentMines === 0) {
@@ -505,14 +537,18 @@ function checkWin() {
 }
 
 function calculateScore() {
-    if (!state.gameWon) {
-        state.score = 0;
-        return;
+    // New click-based scoring system
+    if (state.mode === 'solo') {
+        // Solo: score = tiles clicked (whether won or lost)
+        state.score = state.tilesClicked;
+    } else {
+        // Multiplayer: winner gets total clicks from all players
+        if (state.gameWon) {
+            state.score = state.totalGameClicks;
+        } else {
+            state.score = state.tilesClicked;
+        }
     }
-
-    const timeScore = Math.max(0, 1000 - state.elapsedTime * 2);
-    const hintBonus = state.hintsRemaining * 100;
-    state.score = Math.floor(timeScore + hintBonus);
 }
 
 function useHint() {
@@ -635,12 +671,15 @@ function updateStats() {
     const minesLeft = state.difficulty.mines - state.flagsPlaced;
     document.getElementById('mines-left').textContent = `Mines: ${minesLeft}`;
     document.getElementById('hints-left').textContent = `Hints: ${state.hintsRemaining}`;
+    // Update timer display to show clicks instead
+    document.getElementById('timer').textContent = `Clicks: ${state.tilesClicked}`;
 }
 
 function updateTimer() {
     if (state.startTime && !state.gameOver) {
         state.elapsedTime = Math.floor((Date.now() - state.startTime) / 1000);
-        document.getElementById('timer').textContent = `Time: ${state.elapsedTime}s`;
+        // Display clicks instead of time
+        document.getElementById('timer').textContent = `Clicks: ${state.tilesClicked}`;
     }
 }
 
@@ -678,7 +717,7 @@ function showGameResult(won, score, customMessage) {
         resultEmoji.textContent = '💥';
     }
 
-    resultScore.textContent = score > 0 ? `Score: ${score}` : '';
+    resultScore.textContent = score > 0 ? `Tiles Clicked: ${score}` : '';
     overlay.classList.add('active');
 }
 
