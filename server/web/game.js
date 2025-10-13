@@ -34,7 +34,14 @@ const state = {
     // Time Bomb mode variables
     timebombDifficulty: 'medium', // 'easy', 'medium', 'hard', 'impossible', 'hacker'
     timeRemaining: 60, // Countdown timer
-    timebombStartTime: { easy: 90, medium: 60, hard: 45, impossible: 30, hacker: 20 }
+    timebombStartTime: { easy: 90, medium: 60, hard: 45, impossible: 30, hacker: 20 },
+
+    // Survival mode variables
+    survivalLevel: 1,
+    survivalTotalTiles: 0,
+    survivalMineCount: 40,
+    survivalBaseMines: 40,
+    survivalMineIncrease: 5 // Add 5 more mines per level
 };
 
 // Initialize
@@ -178,11 +185,20 @@ function startSoloGame(gameMode = 'standard') {
     document.getElementById('username-display').textContent = state.displayUsername;
     document.getElementById('room-display').textContent = '';
 
+    // Reset survival level when starting fresh
+    if (gameMode === 'survival') {
+        state.survivalLevel = 1;
+        state.survivalTotalTiles = 0;
+        state.survivalMineCount = state.survivalBaseMines;
+    }
+
     // Set title based on game mode
     if (gameMode === 'luck') {
         document.getElementById('leaderboard-title').textContent = 'Russian Roulette';
     } else if (gameMode === 'timebomb') {
         document.getElementById('leaderboard-title').textContent = `Time Bomb - ${state.timebombDifficulty.toUpperCase()}`;
+    } else if (gameMode === 'survival') {
+        document.getElementById('leaderboard-title').textContent = 'Survival - Level 1';
     } else {
         document.getElementById('leaderboard-title').textContent = 'Solo Play';
     }
@@ -380,6 +396,11 @@ function updateTurnIndicator() {
         indicator.textContent = `⏰ TIME: ${state.timeRemaining}s`;
         indicator.className = `turn-indicator ${timeClass}`;
         indicator.style.display = 'block';
+    } else if (state.gameMode === 'survival') {
+        // Show survival level
+        indicator.textContent = `🏃 Level ${state.survivalLevel} | ${state.survivalMineCount} Mines`;
+        indicator.className = 'turn-indicator';
+        indicator.style.display = 'block';
     } else if (state.gameMode === 'luck') {
         if (state.mode === 'solo') {
             indicator.textContent = '🎲 Russian Roulette - No Numbers!';
@@ -433,6 +454,18 @@ function resetGame() {
         if (state.username.toLowerCase() === 'icantlose') {
             state.timeRemaining = 9999;
         }
+    }
+
+    // Initialize Survival mode
+    if (state.gameMode === 'survival') {
+        // Reset to level 1 only if this is a fresh game (not a level progression)
+        if (!state.survivalLevel || state.survivalLevel === 1) {
+            state.survivalLevel = 1;
+            state.survivalTotalTiles = 0;
+            state.survivalMineCount = state.survivalBaseMines;
+        }
+        // Update difficulty to use survival mine count
+        state.difficulty.mines = state.survivalMineCount;
     }
 
     // Initialize board
@@ -533,6 +566,40 @@ function revealCell(row, col) {
     }
 
     if (cell.isMine) {
+        // ICantLose cheat: Skip mine death
+        if (state.username.toLowerCase() === 'icantlose') {
+            // Just reveal the mine but don't die
+            cell.isMine = false;
+            cell.adjacentMines = 0;
+            // Recalculate adjacent numbers for nearby cells
+            for (let dr = -1; dr <= 1; dr++) {
+                for (let dc = -1; dc <= 1; dc++) {
+                    const r = row + dr;
+                    const c = col + dc;
+                    if (r >= 0 && r < state.difficulty.rows && c >= 0 && c < state.difficulty.cols) {
+                        if (!state.board[r][c].isMine) {
+                            let count = 0;
+                            for (let dr2 = -1; dr2 <= 1; dr2++) {
+                                for (let dc2 = -1; dc2 <= 1; dc2++) {
+                                    if (dr2 === 0 && dc2 === 0) continue;
+                                    const r2 = r + dr2;
+                                    const c2 = c + dc2;
+                                    if (r2 >= 0 && r2 < state.difficulty.rows && c2 >= 0 && c2 < state.difficulty.cols) {
+                                        if (state.board[r2][c2].isMine) count++;
+                                    }
+                                }
+                            }
+                            state.board[r][c].adjacentMines = count;
+                        }
+                    }
+                }
+            }
+            updateStats();
+            drawBoard();
+            checkWin();
+            return;
+        }
+
         state.gameOver = true;
         revealAllMines();
         calculateScore(); // Calculate score based on clicks
@@ -543,7 +610,12 @@ function revealCell(row, col) {
 
         drawBoard();
         if (state.mode === 'solo') {
-            setTimeout(() => showGameResult(false, state.score), 500);
+            // Show level reached in Survival mode
+            if (state.gameMode === 'survival') {
+                setTimeout(() => showGameResult(false, state.score, `Level ${state.survivalLevel} Complete!`), 500);
+            } else {
+                setTimeout(() => showGameResult(false, state.score), 500);
+            }
         }
         return;
     }
@@ -613,6 +685,13 @@ function checkWin() {
     }
 
     state.gameWon = true;
+
+    // Survival mode: Advance to next level
+    if (state.gameMode === 'survival' && state.mode === 'solo') {
+        advanceSurvivalLevel();
+        return;
+    }
+
     state.gameOver = true;
     calculateScore();
 
@@ -626,11 +705,69 @@ function checkWin() {
     }
 }
 
+function advanceSurvivalLevel() {
+    // Update total tiles for final score
+    state.survivalTotalTiles += state.tilesClicked;
+
+    // Advance level
+    state.survivalLevel++;
+    state.survivalMineCount = state.survivalBaseMines + (state.survivalLevel - 1) * state.survivalMineIncrease;
+
+    // Cap at reasonable max (board can only fit 256 - safe tiles)
+    const maxMines = (state.difficulty.rows * state.difficulty.cols) - 20; // Keep at least 20 safe tiles
+    if (state.survivalMineCount > maxMines) {
+        state.survivalMineCount = maxMines;
+    }
+
+    // Update difficulty
+    state.difficulty.mines = state.survivalMineCount;
+
+    // Update title
+    document.getElementById('leaderboard-title').textContent = `Survival - Level ${state.survivalLevel}`;
+
+    // Show level up message briefly
+    const indicator = document.getElementById('turn-indicator');
+    indicator.textContent = `🎉 LEVEL ${state.survivalLevel}! 🎉`;
+    indicator.className = 'turn-indicator';
+    indicator.style.display = 'block';
+
+    // Reset board state for new level
+    state.gameWon = false;
+    state.firstClick = true;
+    state.flagsPlaced = 0;
+    state.tilesClicked = 0;
+
+    // Clear and refill board
+    for (let row = 0; row < state.difficulty.rows; row++) {
+        for (let col = 0; col < state.difficulty.cols; col++) {
+            state.board[row][col] = {
+                isMine: false,
+                isRevealed: false,
+                isFlagged: false,
+                adjacentMines: 0
+            };
+        }
+    }
+
+    drawBoard();
+    updateStats();
+
+    // Reset indicator after 2 seconds
+    setTimeout(() => {
+        updateTurnIndicator();
+    }, 2000);
+}
+
 function calculateScore() {
     // New click-based scoring system
     if (state.mode === 'solo') {
-        // Solo: score = tiles clicked (whether won or lost)
-        state.score = state.tilesClicked;
+        // Survival mode: score = total tiles across all levels
+        if (state.gameMode === 'survival') {
+            state.score = state.survivalTotalTiles + state.tilesClicked;
+        } else {
+            // Solo: score = tiles clicked (whether won or lost)
+            state.score = state.tilesClicked;
+        }
     } else {
         // Multiplayer: winner gets total clicks from all players
         if (state.gameWon) {
