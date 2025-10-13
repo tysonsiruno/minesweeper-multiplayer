@@ -406,7 +406,14 @@ function startMultiplayerGame(boardSeed) {
     showScreen('game-screen');
     document.getElementById('username-display').textContent = state.displayUsername;
     document.getElementById('room-display').textContent = `Room: ${state.roomCode}`;
-    document.getElementById('leaderboard-title').textContent = 'Race Standings';
+
+    // Show game mode name in title
+    let modeTitle = 'Multiplayer';
+    if (state.gameMode === 'luck') modeTitle = 'Russian Roulette';
+    else if (state.gameMode === 'timebomb') modeTitle = `Time Bomb - ${state.timebombDifficulty.toUpperCase()}`;
+    else if (state.gameMode === 'survival') modeTitle = 'Survival';
+    else if (state.gameMode === 'standard') modeTitle = 'Standard Race';
+    document.getElementById('leaderboard-title').textContent = modeTitle;
 
     // Seed random for consistent board
     Math.seedrandom = (seed) => {
@@ -418,6 +425,7 @@ function startMultiplayerGame(boardSeed) {
 
     resetGame();
     updateTurnIndicator();
+    loadGlobalLeaderboard(); // Load global leaderboard for this mode
 }
 
 function updateTurnIndicator() {
@@ -564,7 +572,7 @@ function placeMines(excludeRow, excludeCol) {
     }
 }
 
-function revealCell(row, col) {
+function revealCell(row, col, isUserClick = true) {
     if (row < 0 || row >= state.difficulty.rows || col < 0 || col >= state.difficulty.cols) return;
 
     const cell = state.board[row][col];
@@ -590,8 +598,8 @@ function revealCell(row, col) {
         placeMines(row, col);
     }
 
-    // Time Bomb: Add time bonus for revealing safe tile (not for cheat username)
-    if (state.gameMode === 'timebomb' && !cell.isMine && state.username.toLowerCase() !== 'icantlose') {
+    // Time Bomb: Add time bonus ONLY for direct user clicks (not flood fill)
+    if (state.gameMode === 'timebomb' && !cell.isMine && isUserClick && state.username.toLowerCase() !== 'icantlose') {
         state.timeRemaining += state.timebombTimeBonus[state.timebombDifficulty];
         updateTurnIndicator();
     }
@@ -668,7 +676,7 @@ function revealCell(row, col) {
         for (let dr = -1; dr <= 1; dr++) {
             for (let dc = -1; dc <= 1; dc++) {
                 if (dr === 0 && dc === 0) continue;
-                revealCell(row + dr, col + dc);
+                revealCell(row + dr, col + dc, false); // Pass false = not a user click
             }
         }
     }
@@ -1030,19 +1038,23 @@ async function submitScoreToBackend(won, score) {
 
 async function loadLeaderboard() {
     if (state.mode === 'solo') {
-        try {
-            const response = await fetch(
-                `${SERVER_URL}/api/leaderboard/global?difficulty=${state.gameMode}`
-            );
-            const data = await response.json();
-            displaySoloLeaderboard(data.leaderboard);
-        } catch (error) {
-            console.error('Failed to load leaderboard:', error);
-        }
+        loadGlobalLeaderboard();
     }
 }
 
-function displaySoloLeaderboard(scores) {
+async function loadGlobalLeaderboard() {
+    try {
+        const response = await fetch(
+            `${SERVER_URL}/api/leaderboard/global?difficulty=${state.gameMode}`
+        );
+        const data = await response.json();
+        displayGlobalLeaderboard(data.leaderboard);
+    } catch (error) {
+        console.error('Failed to load global leaderboard:', error);
+    }
+}
+
+function displayGlobalLeaderboard(scores) {
     const leaderboard = document.getElementById('leaderboard');
     leaderboard.innerHTML = '';
 
