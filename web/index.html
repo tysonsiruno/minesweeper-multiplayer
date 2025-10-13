@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Minesweeper Multiplayer</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div id="app">
+        <!-- Username Entry Screen -->
+        <div id="username-screen" class="screen active">
+            <div class="container">
+                <h1>🎮 MINESWEEPER MULTIPLAYER 🎮</h1>
+                <div class="form-group">
+                    <input type="text" id="username-input" placeholder="Enter your username" maxlength="20" autofocus>
+                    <button id="username-submit" class="btn btn-primary">Continue</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Game Mode Selection -->
+        <div id="mode-screen" class="screen">
+            <div class="container">
+                <h1>Choose Game Mode</h1>
+                <div class="button-group">
+                    <button id="solo-btn" class="btn btn-large">Solo</button>
+                    <button id="multiplayer-btn" class="btn btn-large">Multiplayer</button>
+                </div>
+                <button id="back-to-username" class="btn btn-secondary">Back</button>
+            </div>
+        </div>
+
+        <!-- Multiplayer Lobby -->
+        <div id="lobby-screen" class="screen">
+            <div class="container">
+                <h1>Multiplayer Lobby</h1>
+                <div id="connection-status" class="status-message">Connecting to server...</div>
+                <div class="button-group">
+                    <button id="create-room-btn" class="btn btn-large">Create Room</button>
+                    <button id="join-room-btn" class="btn btn-large">Join Room</button>
+                </div>
+                <button id="back-to-mode" class="btn btn-secondary">Back</button>
+            </div>
+        </div>
+
+        <!-- Join Room -->
+        <div id="join-screen" class="screen">
+            <div class="container">
+                <h1>Join Room</h1>
+                <div class="form-group">
+                    <input type="text" id="room-code-input" placeholder="Enter 6-digit room code" maxlength="6">
+                    <button id="join-submit" class="btn btn-primary">Join</button>
+                </div>
+                <div id="join-error" class="error-message"></div>
+                <button id="back-to-lobby" class="btn btn-secondary">Back</button>
+            </div>
+        </div>
+
+        <!-- Game Mode Selection for Room Creation -->
+        <div id="gamemode-screen" class="screen">
+            <div class="container">
+                <h1>Choose Game Mode</h1>
+                <div class="mode-cards">
+                    <div class="mode-card" data-mode="standard">
+                        <h2>Standard Race</h2>
+                        <p>Normal minesweeper rules</p>
+                        <p>First to finish wins!</p>
+                        <button class="btn btn-primary select-mode">Select</button>
+                    </div>
+                    <div class="mode-card" data-mode="luck">
+                        <h2>Luck Mode</h2>
+                        <p>Turn-based gameplay</p>
+                        <p>One click per turn</p>
+                        <p>No numbers shown!</p>
+                        <button class="btn btn-primary select-mode">Select</button>
+                    </div>
+                </div>
+                <button id="back-to-lobby2" class="btn btn-secondary">Back</button>
+            </div>
+        </div>
+
+        <!-- Waiting Room -->
+        <div id="waiting-screen" class="screen">
+            <div class="container">
+                <h1>Waiting Room</h1>
+                <div id="room-info" class="room-info">
+                    <h2>Room Code: <span id="display-room-code"></span></h2>
+                    <p class="share-message">Share this code with friends!</p>
+                </div>
+                <div id="players-list" class="players-list"></div>
+                <button id="ready-btn" class="btn btn-primary">Ready</button>
+                <button id="leave-room-btn" class="btn btn-secondary">Leave Room</button>
+            </div>
+        </div>
+
+        <!-- Game Screen -->
+        <div id="game-screen" class="screen">
+            <div class="game-container">
+                <div class="game-header">
+                    <div class="game-info">
+                        <span id="username-display"></span>
+                        <span id="room-display"></span>
+                    </div>
+                    <div id="turn-indicator" class="turn-indicator"></div>
+                    <div class="game-stats">
+                        <span id="mines-left">Mines: 0</span>
+                        <span id="timer">Time: 0s</span>
+                        <span id="hints-left">Hints: 3</span>
+                    </div>
+                </div>
+
+                <div class="game-content">
+                    <div class="game-board-container">
+                        <canvas id="game-canvas"></canvas>
+                    </div>
+
+                    <div class="game-sidebar">
+                        <h3 id="leaderboard-title">Leaderboard</h3>
+                        <div id="leaderboard" class="leaderboard"></div>
+
+                        <div class="game-controls">
+                            <button id="hint-btn" class="btn btn-small">Hint (H)</button>
+                            <button id="new-game-btn" class="btn btn-small">New Game</button>
+                            <button id="quit-btn" class="btn btn-small btn-secondary">Quit</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Game Result Overlay -->
+        <div id="result-overlay" class="overlay">
+            <div class="result-content">
+                <h1 id="result-text"></h1>
+                <div id="result-emoji"></div>
+                <p id="result-score"></p>
+                <button id="result-ok-btn" class="btn btn-primary">OK</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
+    <script src="game.js"></script>
+</body>
+</html>

@@ -5,13 +5,17 @@ Flask + Socket.IO backend for multiplayer functionality
 
 import os
 import secrets
-from flask import Flask, jsonify, request
+from flask import Flask, jsonify, request, send_from_directory
 from flask_socketio import SocketIO, emit, join_room, leave_room, rooms
 from flask_cors import CORS
 from datetime import datetime
 import json
 
-app = Flask(__name__)
+# Get paths
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+WEB_DIR = os.path.join(os.path.dirname(BASE_DIR), 'web')
+
+app = Flask(__name__, static_folder=WEB_DIR, static_url_path='')
 app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', secrets.token_hex(16))
 CORS(app)
 socketio = SocketIO(app, cors_allowed_origins="*")
@@ -27,6 +31,18 @@ def generate_room_code():
         code = secrets.token_hex(3).upper()
         if code not in game_rooms:
             return code
+
+# Web Client Routes
+
+@app.route('/')
+def index():
+    """Serve the web client"""
+    return send_from_directory(WEB_DIR, 'index.html')
+
+@app.route('/<path:path>')
+def serve_static(path):
+    """Serve static files"""
+    return send_from_directory(WEB_DIR, path)
 
 # REST API Endpoints
 
