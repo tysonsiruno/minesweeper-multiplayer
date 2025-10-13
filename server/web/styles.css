@@ -333,7 +333,12 @@ input[type="text"]:focus {
 }
 
 .game-controls .btn-secondary {
+    background: rgba(102, 126, 234, 0.6);
     color: white;
+}
+
+.game-controls .btn-secondary:hover {
+    background: rgba(102, 126, 234, 0.8);
 }
 
 /* Result Overlay */
