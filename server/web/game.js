@@ -328,6 +328,11 @@ function startSoloGame(gameMode = 'standard') {
 
 function showMultiplayerLobby() {
     showScreen('lobby-screen');
+
+    // Disable buttons until connected
+    document.getElementById('create-room-btn').disabled = true;
+    document.getElementById('join-room-btn').disabled = true;
+
     connectToServer();
 }
 
@@ -422,7 +427,16 @@ function connectToServer() {
     });
 
     state.socket.on('error', (data) => {
-        alert('Error: ' + data.message);
+        console.log('Server error:', data.message);
+
+        // If on join screen, show error there
+        if (state.currentScreen === 'join-screen') {
+            const errorEl = document.getElementById('join-error');
+            errorEl.textContent = data.message;
+            errorEl.style.color = '#ff6b6b'; // Red error color
+        } else {
+            alert('Error: ' + data.message);
+        }
     });
 }
 
@@ -443,17 +457,28 @@ function createRoom(gameMode) {
 }
 
 function joinRoom() {
-    const input = document.getElementById('room-code-input').value.trim().toUpperCase();
-    // Only allow hex characters (0-9, A-F)
-    const roomCode = input.replace(/[^A-F0-9]/g, '');
+    // Trim whitespace and uppercase the room code
+    const roomCode = document.getElementById('room-code-input').value.trim().toUpperCase();
+
+    console.log('Joining room with code:', roomCode);
 
     if (!roomCode || roomCode.length !== 6) {
-        document.getElementById('join-error').textContent = 'Please enter a valid 6-character room code (letters and numbers only)';
+        document.getElementById('join-error').textContent = 'Please enter a valid 6-character room code';
         return;
     }
 
-    // Clear any error messages
-    document.getElementById('join-error').textContent = '';
+    // Check socket connection
+    if (!state.socket || !state.socket.connected) {
+        document.getElementById('join-error').textContent = 'Not connected to server. Please go back to lobby and try again.';
+        console.error('Socket not connected:', { socket: state.socket, connected: state.socket?.connected });
+        return;
+    }
+
+    // Clear any error messages and show loading state
+    document.getElementById('join-error').textContent = 'Joining room...';
+    document.getElementById('join-error').style.color = '#667eea';
+
+    console.log('Emitting join_room event:', { room_code: roomCode, username: state.displayUsername });
 
     state.socket.emit('join_room', {
         room_code: roomCode,
