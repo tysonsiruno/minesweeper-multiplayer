@@ -402,9 +402,11 @@ input[type="text"]:focus {
     -webkit-touch-callout: none; /* Disable iOS callout */
 }
 
+/* Canvas click effect removed - no more bounce!
 #game-canvas:active {
     transform: scale(0.98);
 }
+*/
 
 .game-sidebar {
     width: 250px;
