@@ -355,6 +355,8 @@ input[type="text"]:focus {
 .game-content {
     display: flex;
     gap: 20px;
+    align-items: flex-start;
+    max-height: calc(100vh - 200px); /* Fit in viewport */
 }
 
 @media (max-width: 1000px) {
@@ -367,11 +369,13 @@ input[type="text"]:focus {
     flex: 1;
     display: flex;
     justify-content: center;
-    align-items: flex-start;
+    align-items: center; /* Center vertically */
     /* RESPONSIVENESS FIX: Prevent any bounce on canvas container */
     overscroll-behavior: none;
     -webkit-overflow-scrolling: auto;
     touch-action: none; /* No gestures on canvas container */
+    max-height: calc(100vh - 250px); /* Ensure it fits in viewport */
+    overflow: auto; /* Allow scrolling if needed */
 }
 
 #game-canvas {

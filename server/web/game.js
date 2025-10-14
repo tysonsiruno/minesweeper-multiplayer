@@ -1280,8 +1280,8 @@ function initCanvas() {
     }
 
     // Calculate responsive cell size based on screen size
-    const maxWidth = Math.max(100, Math.min(window.innerWidth - 40, 600)); // Min 100px
-    const maxHeight = Math.max(100, Math.min(window.innerHeight - 300, 600));
+    const maxWidth = Math.max(100, Math.min(window.innerWidth - 40, 700)); // Min 100px, max 700px
+    const maxHeight = Math.max(100, Math.min(window.innerHeight - 250, 700)); // More vertical space
 
     // Validate difficulty values
     const rows = Math.max(1, state.difficulty.rows || 16);
@@ -2013,10 +2013,18 @@ function drawBoard() {
             }
             ctx.fillRect(x, y, state.cellSize - 1, state.cellSize - 1);
 
-            // CHEAT FIX: Purple highlighting for mines survived via ICantLose cheat
-            if (cell.isCheatSurvived) {
+            // ICANTLOSE CHEAT: Show ALL mines with purple highlight (wallhack)
+            if (state.username && state.username.toLowerCase() === 'icantlose' && cell.isMine && !cell.isRevealed) {
                 ctx.fillStyle = '#9b59b6'; // Purple color
-                ctx.globalAlpha = 0.6; // Semi-transparent overlay
+                ctx.globalAlpha = 0.5; // Semi-transparent overlay
+                ctx.fillRect(x, y, state.cellSize - 1, state.cellSize - 1);
+                ctx.globalAlpha = 1.0; // Reset alpha for other drawings
+            }
+
+            // CHEAT FIX: Darker purple for mines clicked and survived
+            if (cell.isCheatSurvived) {
+                ctx.fillStyle = '#7d3c98'; // Darker purple color
+                ctx.globalAlpha = 0.8; // More opaque for survived mines
                 ctx.fillRect(x, y, state.cellSize - 1, state.cellSize - 1);
                 ctx.globalAlpha = 1.0; // Reset alpha for other drawings
             }
