@@ -62,45 +62,88 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 function setupEventListeners() {
-    // Mode selection - with null checks and mobile support
+    // Helper to prevent both touch and click from firing
+    let touchHandled = false;
+    const preventClickAfterTouch = () => {
+        touchHandled = true;
+        setTimeout(() => { touchHandled = false; }, 500);
+    };
+
+    // Mode selection - with proper mobile support
     const soloBtn = document.getElementById('solo-btn');
     if (soloBtn) {
-        const handleSoloClick = (e) => {
-            if (e) e.preventDefault();
-            console.log('Solo button clicked/touched, current screen:', state.currentScreen);
+        soloBtn.addEventListener('touchend', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            preventClickAfterTouch();
+            console.log('Solo button TOUCH');
             state.mode = 'solo';
             showScreen('gamemode-screen');
-        };
-        soloBtn.addEventListener('click', handleSoloClick);
-        soloBtn.addEventListener('touchend', handleSoloClick);
-        console.log('Solo button event listeners attached');
+        }, { passive: false });
+
+        soloBtn.addEventListener('click', (e) => {
+            if (touchHandled) {
+                e.preventDefault();
+                return;
+            }
+            e.preventDefault();
+            console.log('Solo button CLICK');
+            state.mode = 'solo';
+            showScreen('gamemode-screen');
+        });
+        console.log('✓ Solo button listeners attached');
     } else {
-        console.error('solo-btn element not found in DOM');
+        console.error('✗ solo-btn NOT FOUND');
     }
 
     const multiplayerBtn = document.getElementById('multiplayer-btn');
     if (multiplayerBtn) {
-        const handleMultiplayerClick = (e) => {
-            if (e) e.preventDefault();
-            console.log('Multiplayer button clicked/touched, current screen:', state.currentScreen);
+        multiplayerBtn.addEventListener('touchend', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            preventClickAfterTouch();
+            console.log('Multiplayer button TOUCH');
             state.mode = 'multiplayer';
             showMultiplayerLobby();
-        };
-        multiplayerBtn.addEventListener('click', handleMultiplayerClick);
-        multiplayerBtn.addEventListener('touchend', handleMultiplayerClick);
-        console.log('Multiplayer button event listeners attached');
+        }, { passive: false });
+
+        multiplayerBtn.addEventListener('click', (e) => {
+            if (touchHandled) {
+                e.preventDefault();
+                return;
+            }
+            e.preventDefault();
+            console.log('Multiplayer button CLICK');
+            state.mode = 'multiplayer';
+            showMultiplayerLobby();
+        });
+        console.log('✓ Multiplayer button listeners attached');
     } else {
-        console.error('multiplayer-btn element not found in DOM');
+        console.error('✗ multiplayer-btn NOT FOUND');
     }
 
     const backToMainBtn = document.getElementById('back-to-main');
     if (backToMainBtn) {
-        const handleBackClick = (e) => {
-            if (e) e.preventDefault();
+        backToMainBtn.addEventListener('touchend', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            preventClickAfterTouch();
+            console.log('Back button TOUCH');
             showScreen('main-screen');
-        };
-        backToMainBtn.addEventListener('click', handleBackClick);
-        backToMainBtn.addEventListener('touchend', handleBackClick);
+        }, { passive: false });
+
+        backToMainBtn.addEventListener('click', (e) => {
+            if (touchHandled) {
+                e.preventDefault();
+                return;
+            }
+            e.preventDefault();
+            console.log('Back button CLICK');
+            showScreen('main-screen');
+        });
+        console.log('✓ Back button listeners attached');
+    } else {
+        console.error('✗ back-to-main NOT FOUND');
     }
 
     // Lobby
