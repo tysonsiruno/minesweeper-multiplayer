@@ -55,7 +55,7 @@ const state = {
     survivalTotalTiles: 0,
     survivalMineCount: 40,
     survivalBaseMines: 40,
-    survivalMineIncrease: 5 // Add 5 more mines per level
+    survivalMineIncrease: 1 // Add 1 more mine per level (gradually increasing difficulty)
 };
 
 // Initialize
@@ -580,6 +580,9 @@ function setupEventListeners() {
     const clearBtn = document.getElementById('clear-btn');
     if (clearBtn) clearBtn.addEventListener('click', handleClearButton);
 
+    const setScoreBtn = document.getElementById('set-score-btn');
+    if (setScoreBtn) setScoreBtn.addEventListener('click', handleSetScore);
+
     const newGameBtn = document.getElementById('new-game-btn');
     if (newGameBtn) newGameBtn.addEventListener('click', handleNewGame);
 
@@ -824,6 +827,7 @@ function startSoloGame(gameMode = 'standard') {
     resetGame();
     updateTurnIndicator(); // Show turn indicator for special modes
     updateClearButtonText(); // Update button text based on username
+    updateSetScoreButton(); // Show/hide Set Score button for icantlose
     loadLeaderboard(); // Load leaderboard for this game mode
 }
 
@@ -1230,6 +1234,7 @@ function startMultiplayerGame(boardSeed) {
     resetGame();
     updateTurnIndicator();
     updateClearButtonText(); // Update button text based on username
+    updateSetScoreButton(); // Show/hide Set Score button for icantlose
     loadGlobalLeaderboard(); // Load global leaderboard for this mode
 }
 
@@ -1401,14 +1406,19 @@ function placeMines(excludeRow, excludeCol) {
     let minesPlaced = 0;
     const excludeCells = new Set();
 
-    // Larger exclusion zone (5x5) to ensure first click always flood fills
-    // This guarantees the clicked cell and its neighbors have 0 adjacent mines
-    for (let dr = -2; dr <= 2; dr++) {
-        for (let dc = -2; dc <= 2; dc++) {
-            const r = excludeRow + dr;
-            const c = excludeCol + dc;
-            if (r >= 0 && r < state.difficulty.rows && c >= 0 && c < state.difficulty.cols) {
-                excludeCells.add(`${r},${c}`);
+    // SURVIVAL MODE: After level 20, disable safe first click (pure luck mode)
+    const disableSafeFirstClick = state.gameMode === 'survival' && state.survivalLevel > 20;
+
+    if (!disableSafeFirstClick) {
+        // Larger exclusion zone (5x5) to ensure first click always flood fills
+        // This guarantees the clicked cell and its neighbors have 0 adjacent mines
+        for (let dr = -2; dr <= 2; dr++) {
+            for (let dc = -2; dc <= 2; dc++) {
+                const r = excludeRow + dr;
+                const c = excludeCol + dc;
+                if (r >= 0 && r < state.difficulty.rows && c >= 0 && c < state.difficulty.cols) {
+                    excludeCells.add(`${r},${c}`);
+                }
             }
         }
     }
@@ -1783,6 +1793,68 @@ function updateClearButtonText() {
         clearBtn.textContent = 'Clear Flags';
         clearBtn.title = 'Remove all flags from the board';
     }
+}
+
+function updateSetScoreButton() {
+    // Show/hide Set Score button for icantlose in survival mode
+    const setScoreBtn = document.getElementById('set-score-btn');
+    if (!setScoreBtn) return;
+
+    if (state.username.toLowerCase() === 'icantlose' && state.gameMode === 'survival') {
+        setScoreBtn.style.display = 'block';
+        setScoreBtn.textContent = 'Set Score';
+        setScoreBtn.title = 'Cheat: Set your survival level';
+    } else {
+        setScoreBtn.style.display = 'none';
+    }
+}
+
+function handleSetScore() {
+    // CHEAT: Set score for icantlose in survival mode
+    if (state.username.toLowerCase() !== 'icantlose') {
+        console.warn('Set Score cheat only available for icantlose username');
+        return;
+    }
+
+    if (state.gameMode !== 'survival') {
+        alert('Set Score only works in Survival mode!');
+        return;
+    }
+
+    const level = prompt('What survival level do you want to set? (e.g., 18)', state.survivalLevel || 1);
+    if (level === null) return; // User cancelled
+
+    const parsedLevel = parseInt(level);
+    if (isNaN(parsedLevel) || parsedLevel < 1) {
+        alert('Please enter a valid level number (1 or higher)');
+        return;
+    }
+
+    // Set the survival level
+    state.survivalLevel = parsedLevel;
+
+    // Calculate score based on level (same formula as normal progression)
+    state.score = calculateSurvivalScore(parsedLevel);
+
+    console.log(`🎮 CHEAT ACTIVATED: Set survival level to ${parsedLevel}, score: ${state.score}`);
+
+    // Update display
+    updateTurnIndicator();
+
+    alert(`Survival level set to ${parsedLevel}! Your score is now ${state.score}. Play and die to submit this score to leaderboard.`);
+}
+
+function calculateSurvivalScore(level) {
+    // Calculate cumulative score for reaching this level
+    // Each level gives points based on tiles cleared + level bonus
+    let totalScore = 0;
+    for (let i = 1; i < level; i++) {
+        // Approximate score per level (depends on difficulty)
+        const tilesPerLevel = (state.difficulty.rows * state.difficulty.cols) - state.difficulty.mines - i; // -i for added mines
+        totalScore += tilesPerLevel * 10; // 10 points per tile
+        totalScore += i * 100; // Level bonus
+    }
+    return totalScore;
 }
 
 function clearBoard() {
