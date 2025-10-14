@@ -31,7 +31,7 @@ const state = {
     timerInterval: null,
     tilesClicked: 0, // Track tiles clicked for new scoring system
     totalGameClicks: 0, // For multiplayer: total clicks from all players
-    soundEnabled: true // Sound system toggle
+    soundEnabled: true, // Sound system toggle
 
     // Time Bomb mode variables
     timebombDifficulty: 'medium', // 'easy', 'medium', 'hard', 'impossible', 'hacker'
