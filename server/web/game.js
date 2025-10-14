@@ -20,6 +20,7 @@ const state = {
     board: [],
     cellSize: 30,
     firstClick: true,
+    minesPlaced: false, // CRITICAL: Prevent double mine placement
     gameOver: false,
     gameWon: false,
     startTime: null,
@@ -658,8 +659,9 @@ function connectToServer() {
                 return;
             }
 
-            // SYNC FIX: If this is the first click in multiplayer, place mines with the same exclusion zone
-            if (state.firstClick && state.mode === 'multiplayer') {
+            // CRITICAL FIX: Only place mines if they haven't been placed yet
+            // Previous bug: If slow to click, other player's action would re-place mines
+            if (state.firstClick && !state.minesPlaced && state.mode === 'multiplayer') {
                 state.firstClick = false;
                 state.startTime = Date.now();
 
@@ -945,6 +947,7 @@ function handleNewGame() {
 function resetGame() {
     state.board = [];
     state.firstClick = true;
+    state.minesPlaced = false; // CRITICAL: Reset mine placement flag
     state.gameOver = false;
     state.gameWon = false;
     state.startTime = null;
@@ -991,6 +994,14 @@ function resetGame() {
 }
 
 function placeMines(excludeRow, excludeCol) {
+    // CRITICAL FIX: Prevent double mine placement
+    if (state.minesPlaced) {
+        console.warn('Attempted to place mines twice! Blocked.');
+        return;
+    }
+
+    console.log('Placing mines with exclusion at:', excludeRow, excludeCol);
+
     let minesPlaced = 0;
     const excludeCells = new Set();
 
@@ -1038,6 +1049,10 @@ function placeMines(excludeRow, excludeCol) {
             }
         }
     }
+
+    // CRITICAL: Mark mines as placed to prevent re-calling
+    state.minesPlaced = true;
+    console.log('Mines placed successfully. Count:', state.difficulty.mines);
 }
 
 function revealCell(row, col, isUserClick = true) {
@@ -1058,9 +1073,8 @@ function revealCell(row, col, isUserClick = true) {
         updateTurnIndicator();
     }
 
-    cell.isRevealed = true;
-
-    if (state.firstClick) {
+    // CRITICAL FIX: Place mines BEFORE revealing cell to prevent board corruption
+    if (state.firstClick && !state.minesPlaced) {
         state.firstClick = false;
         state.startTime = Date.now();
 
@@ -1073,6 +1087,15 @@ function revealCell(row, col, isUserClick = true) {
         placeMines(row, col);
     }
 
+    // CRITICAL: Don't reveal until mines are placed
+    if (!state.minesPlaced) {
+        console.warn('Attempted to reveal before mines placed! Blocked.');
+        return;
+    }
+
+    // NOW safe to reveal
+    cell.isRevealed = true;
+
     // Time Bomb: Add time bonus ONLY for direct user clicks (not flood fill)
     // Skip time bonus for ICantLose cheat (they have infinite time already)
     if (state.gameMode === 'timebomb' && !cell.isMine && isUserClick && state.username.toLowerCase() !== 'icantlose') {
@@ -1081,39 +1104,26 @@ function revealCell(row, col, isUserClick = true) {
     }
 
     if (cell.isMine) {
-        // ICantLose cheat: Skip mine death and remove the bomb
-        // Works in all modes for trolling purposes - let them figure it out!
+        // CRITICAL FIX: ICantLose cheat WITHOUT modifying board state
+        // Previous version recalculated adjacent mines, causing numbers to change mid-game!
         if (state.username.toLowerCase() === 'icantlose') {
-            // Just reveal the mine but don't die - convert it to a safe tile
-            cell.isMine = false;
-            cell.adjacentMines = 0;
-            // Recalculate adjacent numbers for nearby cells
-            for (let dr = -1; dr <= 1; dr++) {
-                for (let dc = -1; dc <= 1; dc++) {
-                    const r = row + dr;
-                    const c = col + dc;
-                    if (r >= 0 && r < state.difficulty.rows && c >= 0 && c < state.difficulty.cols) {
-                        if (!state.board[r][c].isMine) {
-                            let count = 0;
-                            for (let dr2 = -1; dr2 <= 1; dr2++) {
-                                for (let dc2 = -1; dc2 <= 1; dc2++) {
-                                    if (dr2 === 0 && dc2 === 0) continue;
-                                    const r2 = r + dr2;
-                                    const c2 = c + dc2;
-                                    if (r2 >= 0 && r2 < state.difficulty.rows && c2 >= 0 && c2 < state.difficulty.cols) {
-                                        if (state.board[r2][c2].isMine) count++;
-                                    }
-                                }
-                            }
-                            state.board[r][c].adjacentMines = count;
-                        }
-                    }
-                }
+            // SOLO MODE: Just skip death,  continue playing
+            if (state.mode === 'solo') {
+                console.log('ICantLose cheat: Skipping death in solo mode');
+                // Don't mark as revealed (mine stays hidden)
+                cell.isRevealed = false; // Undo the reveal from line 1096
+                updateStats();
+                drawBoard();
+                return; // Skip death, continue playing
+            } else {
+                // MULTIPLAYER: Silent god mode - don't trigger elimination
+                console.log('ICantLose cheat: Silent god mode in multiplayer');
+                // Don't emit eliminated, don't show result, just return
+                cell.isRevealed = false; // Undo the reveal
+                updateStats();
+                drawBoard();
+                return; // Skip death silently
             }
-            updateStats();
-            drawBoard();
-            checkWin();
-            return;
         }
 
         state.gameOver = true;
@@ -1256,6 +1266,7 @@ function advanceSurvivalLevel() {
     // Reset board state for new level
     state.gameWon = false;
     state.firstClick = true;
+    state.minesPlaced = false; // CRITICAL: Reset for new level
     state.flagsPlaced = 0;
     state.tilesClicked = 0;
 
