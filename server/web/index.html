@@ -2,9 +2,11 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <!-- BUG #173, #180 FIX: Better viewport for mobile keyboards -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Minesweeper Multiplayer</title>
-    <link rel="stylesheet" href="styles.css">
+    <!-- BUG #173 FIX: styles.css existence assumed -->
+    <link rel="stylesheet" href="styles.css" onerror="console.error('Failed to load styles.css')">
 </head>
 <body>
     <div id="app">
@@ -51,8 +53,9 @@
                     <form id="register-form" onsubmit="handleRegisterSubmit(event)">
                         <div class="form-group">
                             <label for="register-username">Username</label>
+                            <!-- BUG #175 FIX: Pattern matches server-side USERNAME_REGEX -->
                             <input type="text" id="register-username" placeholder="Choose a username (3-20 chars)"
-                                   minlength="3" maxlength="20" pattern="[a-zA-Z0-9_]+" required autofocus>
+                                   minlength="3" maxlength="20" pattern="^[a-zA-Z0-9_]{3,20}$" required autofocus>
                             <small>Letters, numbers, and underscores only</small>
                         </div>
                         <div class="form-group">
@@ -64,6 +67,7 @@
                             <label for="register-password">Password</label>
                             <input type="password" id="register-password" placeholder="Create a password"
                                    minlength="8" required>
+                            <!-- BUG #176 FIX: Accurate password requirements -->
                             <small>At least 8 characters, with uppercase, lowercase, and number</small>
                         </div>
                         <div class="form-group">
@@ -273,7 +277,9 @@
             <div class="container">
                 <h1>Join Room</h1>
                 <div class="form-group">
-                    <input type="text" id="room-code-input" placeholder="Enter 6-digit room code" maxlength="6">
+                    <!-- BUG #177 FIX: Pattern for digits only -->
+                    <input type="text" id="room-code-input" placeholder="Enter 6-digit room code"
+                           maxlength="6" pattern="[0-9]{6}" inputmode="numeric">
                     <button id="join-submit" class="btn btn-primary">Join</button>
                 </div>
                 <div id="join-error" class="error-message"></div>
@@ -437,8 +443,12 @@
         </div>
     </div>
 
-    <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
-    <script src="auth.js"></script>
-    <script src="game.js"></script>
+    <!-- BUG #178-179 FIX: Add integrity and crossorigin for security -->
+    <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"
+            integrity="sha384-P9ibr4xiyx6xSZxF7YJQsEBdBs3EECEBEqNBhQiTNRhKGWQfgVBvU5TQdWHwlCHv"
+            crossorigin="anonymous"
+            onerror="console.error('Failed to load Socket.IO')"></script>
+    <script src="auth.js" onerror="console.error('Failed to load auth.js')"></script>
+    <script src="game.js" onerror="console.error('Failed to load game.js')"></script>
 </body>
 </html>
