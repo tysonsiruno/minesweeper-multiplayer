@@ -14,6 +14,7 @@ const state = {
     gameStarted: false,
     currentTurn: null,
     seededRandom: null, // Store seeded random for multiplayer
+    lastGameWinner: null, // Track winner for mode selection
 
     // Game variables
     difficulty: { name: 'Medium', rows: 16, cols: 16, mines: 40 },
@@ -599,24 +600,22 @@ function setupEventListeners() {
         // BUG #35, #80 FIXES: Reset gameStarted and validate players array
         state.gameStarted = false;
 
-        // In multiplayer, host picks next mode, others wait
+        // In multiplayer, winner picks next mode, loser waits
         if (state.mode === 'multiplayer') {
-            // Check if we're the host (first player in the room)
-            const isHost = state.players && Array.isArray(state.players) &&
-                           state.players.length > 0 &&
-                           state.players[0] &&
-                           state.players[0].username === state.displayUsername;
+            // Check if we won the last game
+            const isWinner = state.lastGameWinner === state.displayUsername;
 
-            if (isHost) {
-                // Host goes to mode selection
+            if (isWinner) {
+                // Winner goes to mode selection
                 showScreen('gamemode-screen');
             } else {
-                // Non-host goes to waiting room
+                // Loser waits for winner to pick
                 showWaitingRoom();
             }
         } else {
-            // Solo mode - go back to mode selection
-            showScreen('mode-screen');
+            // SOLO MODE: Stay in same mode to grind for better score
+            // Just restart the same game mode
+            restartSameGameMode();
         }
     });
 
@@ -1017,6 +1016,10 @@ function connectToServer() {
         const myResult = results.find(p => p && p.username === state.displayUsername);
         const won = results[0] && results[0].username === state.displayUsername;
         const finalScore = myResult && typeof myResult.score === 'number' ? myResult.score : 0;
+
+        // Track the winner for mode selection
+        state.lastGameWinner = results[0] ? results[0].username : null;
+
         showGameResult(won, finalScore);
     });
 
@@ -2405,6 +2408,28 @@ function quitGame() {
         showScreen('lobby-screen');
     } else {
         showScreen('username-screen');
+    }
+}
+
+function restartSameGameMode() {
+    // Restart the same game mode for grinding better scores
+    // This keeps players in the same mode instead of kicking them back to mode selection
+
+    if (state.gameMode === 'standard') {
+        // Restart standard mode with same difficulty
+        startSoloGame('standard');
+    } else if (state.gameMode === 'luck') {
+        // Restart Russian Roulette
+        startSoloGame('luck');
+    } else if (state.gameMode === 'timebomb') {
+        // Restart Time Bomb with same difficulty
+        startSoloGame('timebomb');
+    } else if (state.gameMode === 'survival') {
+        // Restart Survival from level 1
+        startSoloGame('survival');
+    } else {
+        // Fallback: go to mode selection
+        showScreen('mode-screen');
     }
 }
 
