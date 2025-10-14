@@ -62,30 +62,41 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 function setupEventListeners() {
-    // Mode selection - with null checks
+    // Mode selection - with null checks and mobile support
     const soloBtn = document.getElementById('solo-btn');
     if (soloBtn) {
-        soloBtn.addEventListener('click', () => {
-            console.log('Solo button clicked');
+        const handleSoloClick = (e) => {
+            e.preventDefault();
+            console.log('Solo button clicked/touched');
             showScreen('gamemode-screen');
-        });
+        };
+        soloBtn.addEventListener('click', handleSoloClick);
+        soloBtn.addEventListener('touchend', handleSoloClick);
     } else {
         console.error('solo-btn element not found in DOM');
     }
 
     const multiplayerBtn = document.getElementById('multiplayer-btn');
     if (multiplayerBtn) {
-        multiplayerBtn.addEventListener('click', () => {
-            console.log('Multiplayer button clicked');
+        const handleMultiplayerClick = (e) => {
+            e.preventDefault();
+            console.log('Multiplayer button clicked/touched');
             showMultiplayerLobby();
-        });
+        };
+        multiplayerBtn.addEventListener('click', handleMultiplayerClick);
+        multiplayerBtn.addEventListener('touchend', handleMultiplayerClick);
     } else {
         console.error('multiplayer-btn element not found in DOM');
     }
 
     const backToMainBtn = document.getElementById('back-to-main');
     if (backToMainBtn) {
-        backToMainBtn.addEventListener('click', () => showScreen('main-screen'));
+        const handleBackClick = (e) => {
+            e.preventDefault();
+            showScreen('main-screen');
+        };
+        backToMainBtn.addEventListener('click', handleBackClick);
+        backToMainBtn.addEventListener('touchend', handleBackClick);
     }
 
     // Lobby

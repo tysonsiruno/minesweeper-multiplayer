@@ -167,12 +167,19 @@ def register():
 def login():
     """User login"""
     data = request.json
-    username_or_email = sanitize_input(data.get('username_or_email', ''), 255).lower()
+    # Get raw input without sanitization first for password
+    username_or_email_raw = data.get('username_or_email', '').strip()
     password = data.get('password', '')
     remember_me = data.get('remember_me', False)
 
-    # Find user by username or email
-    user = User.query.filter((User.username == username_or_email) | (User.email == username_or_email)).first()
+    # Sanitize but don't lowercase username (only lowercase email)
+    username_or_email = sanitize_input(username_or_email_raw, 255)
+
+    # Try case-sensitive username first, then case-insensitive email
+    user = User.query.filter(User.username == username_or_email).first()
+    if not user:
+        # Try as email (case-insensitive)
+        user = User.query.filter(User.email == username_or_email.lower()).first()
 
     if not user or not verify_password(password, user.password_hash):
         if user:
