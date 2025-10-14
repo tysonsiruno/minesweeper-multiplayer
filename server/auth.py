@@ -21,7 +21,7 @@ REFRESH_TOKEN_EXPIRES_REMEMBER = timedelta(days=30)
 
 # Password Requirements
 PASSWORD_MIN_LENGTH = 8
-PASSWORD_REGEX = re.compile(r'^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[!@#$%^&*()_+\-=\[\]{};:\'",.<>?/\\|`~])')
+PASSWORD_REGEX = re.compile(r'^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)')
 
 # Username Requirements
 USERNAME_REGEX = re.compile(r'^[a-zA-Z0-9_]{3,20}$')
@@ -74,7 +74,6 @@ def validate_password(password: str) -> tuple:
     - At least 1 uppercase letter
     - At least 1 lowercase letter
     - At least 1 number
-    - At least 1 special character
 
     Returns:
         (is_valid: bool, error_message: str or None)
@@ -90,9 +89,6 @@ def validate_password(password: str) -> tuple:
 
     if not re.search(r'\d', password):
         return False, 'Password must contain at least one number'
-
-    if not re.search(r'[!@#$%^&*()_+\-=\[\]{};:\'",.<>?/\\|`~]', password):
-        return False, 'Password must contain at least one special character'
 
     return True, None
 

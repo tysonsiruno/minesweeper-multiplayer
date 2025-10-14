@@ -66,12 +66,14 @@ function setupEventListeners() {
     const soloBtn = document.getElementById('solo-btn');
     if (soloBtn) {
         const handleSoloClick = (e) => {
-            e.preventDefault();
-            console.log('Solo button clicked/touched');
+            if (e) e.preventDefault();
+            console.log('Solo button clicked/touched, current screen:', state.currentScreen);
+            state.mode = 'solo';
             showScreen('gamemode-screen');
         };
         soloBtn.addEventListener('click', handleSoloClick);
         soloBtn.addEventListener('touchend', handleSoloClick);
+        console.log('Solo button event listeners attached');
     } else {
         console.error('solo-btn element not found in DOM');
     }
@@ -79,12 +81,14 @@ function setupEventListeners() {
     const multiplayerBtn = document.getElementById('multiplayer-btn');
     if (multiplayerBtn) {
         const handleMultiplayerClick = (e) => {
-            e.preventDefault();
-            console.log('Multiplayer button clicked/touched');
+            if (e) e.preventDefault();
+            console.log('Multiplayer button clicked/touched, current screen:', state.currentScreen);
+            state.mode = 'multiplayer';
             showMultiplayerLobby();
         };
         multiplayerBtn.addEventListener('click', handleMultiplayerClick);
         multiplayerBtn.addEventListener('touchend', handleMultiplayerClick);
+        console.log('Multiplayer button event listeners attached');
     } else {
         console.error('multiplayer-btn element not found in DOM');
     }
@@ -92,7 +96,7 @@ function setupEventListeners() {
     const backToMainBtn = document.getElementById('back-to-main');
     if (backToMainBtn) {
         const handleBackClick = (e) => {
-            e.preventDefault();
+            if (e) e.preventDefault();
             showScreen('main-screen');
         };
         backToMainBtn.addEventListener('click', handleBackClick);

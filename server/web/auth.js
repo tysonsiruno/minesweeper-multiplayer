@@ -205,9 +205,11 @@ async function register(username, email, password) {
             const usernameEl = document.getElementById('register-username');
             const emailEl = document.getElementById('register-email');
             const passwordEl = document.getElementById('register-password');
+            const passwordConfirmEl = document.getElementById('register-password-confirm');
             if (usernameEl) usernameEl.value = '';
             if (emailEl) emailEl.value = '';
             if (passwordEl) passwordEl.value = '';
+            if (passwordConfirmEl) passwordConfirmEl.value = '';
 
             // Switch to login screen after 2 seconds
             setTimeout(() => {
@@ -662,6 +664,17 @@ function handleRegisterSubmit(e) {
     const username = document.getElementById('register-username').value.trim();
     const email = document.getElementById('register-email').value.trim();
     const password = document.getElementById('register-password').value;
+    const passwordConfirm = document.getElementById('register-password-confirm').value;
+
+    // Check if passwords match
+    const errorEl = document.getElementById('register-error');
+    if (password !== passwordConfirm) {
+        if (errorEl) {
+            errorEl.textContent = 'Passwords do not match';
+            errorEl.style.display = 'block';
+        }
+        return;
+    }
 
     register(username, email, password);
 }
