@@ -359,7 +359,7 @@ input[type="text"]:focus {
     display: flex;
     gap: 20px;
     align-items: flex-start;
-    max-height: calc(100vh - 200px); /* Fit in viewport */
+    /* Removed max-height constraint to allow proper board sizing */
 }
 
 @media (max-width: 1200px) {
@@ -381,9 +381,9 @@ input[type="text"]:focus {
     overscroll-behavior: none;
     -webkit-overflow-scrolling: auto;
     touch-action: none; /* No gestures on canvas container */
-    max-height: calc(100vh - 200px); /* Ensure it fits in viewport */
+    min-height: 400px; /* Ensure minimum board space */
     max-width: 100%; /* Allow full width for hard mode */
-    overflow: auto; /* Allow scrolling if needed */
+    overflow: visible; /* Let canvas size naturally */
 }
 
 #game-canvas {
