@@ -180,16 +180,21 @@ function setupEventListeners() {
     // Touch events for mobile
     let touchStartTime = 0;
     let touchStartPos = null;
+    const CANVAS_BORDER_WIDTH = 3; // Canvas has 3px border in CSS
 
     canvas.addEventListener('touchstart', (e) => {
         e.preventDefault();
         touchStartTime = Date.now();
         const touch = e.touches[0];
         const rect = canvas.getBoundingClientRect();
-        touchStartPos = {
-            x: touch.clientX - rect.left,
-            y: touch.clientY - rect.top
-        };
+
+        // Account for border width - subtract border from coordinates
+        const x = touch.clientX - rect.left - CANVAS_BORDER_WIDTH;
+        const y = touch.clientY - rect.top - CANVAS_BORDER_WIDTH;
+
+        touchStartPos = { x, y };
+
+        console.log('Touch start:', { x, y, cellSize: state.cellSize });
     });
 
     canvas.addEventListener('touchend', (e) => {
@@ -199,6 +204,15 @@ function setupEventListeners() {
         const touchDuration = Date.now() - touchStartTime;
         const col = Math.floor(touchStartPos.x / state.cellSize);
         const row = Math.floor(touchStartPos.y / state.cellSize);
+
+        // Bounds checking - ensure we're within the board
+        if (row < 0 || row >= state.difficulty.rows || col < 0 || col >= state.difficulty.cols) {
+            console.log('Touch out of bounds:', { row, col, rows: state.difficulty.rows, cols: state.difficulty.cols });
+            touchStartPos = null;
+            return;
+        }
+
+        console.log('Touch end:', { row, col, duration: touchDuration, username: state.username });
 
         if (touchDuration > 500) {
             // Long press = flag
@@ -393,16 +407,30 @@ function connectToServer() {
 
     state.socket.on('player_action', (data) => {
         // Handle other players' actions
-        console.log(`Player ${data.username} performed action: ${data.action}`);
-        // Increment total clicks for multiplayer scoring
-        if (data.action === 'reveal') {
-            state.totalGameClicks++;
+        console.log(`Player ${data.username} performed action: ${data.action} at (${data.row}, ${data.col})`);
+
+        // Show opponent's move in real-time
+        if (data.action === 'reveal' && data.row !== undefined && data.col !== undefined) {
+            const cell = state.board[data.row][data.col];
+            if (cell && !cell.isRevealed) {
+                cell.isRevealed = true;
+                state.totalGameClicks++;
+                drawBoard();
+            }
+        } else if (data.action === 'flag' && data.row !== undefined && data.col !== undefined) {
+            const cell = state.board[data.row][data.col];
+            if (cell && !cell.isRevealed) {
+                cell.isFlagged = !cell.isFlagged;
+                drawBoard();
+            }
         }
     });
 
     state.socket.on('turn_changed', (data) => {
+        console.log('Turn changed:', { oldTurn: state.currentTurn, newTurn: data.current_turn, myUsername: state.displayUsername });
         state.currentTurn = data.current_turn;
         updateTurnIndicator();
+        drawBoard(); // Redraw to show any visual changes
     });
 
     state.socket.on('player_finished', (data) => {
@@ -739,7 +767,11 @@ function revealCell(row, col, isUserClick = true) {
 
     // Check turn in Luck Mode
     if (state.mode === 'multiplayer' && state.gameMode === 'luck') {
-        if (state.currentTurn !== state.username) return;
+        if (state.currentTurn !== state.displayUsername) {
+            console.log('Not your turn!', { currentTurn: state.currentTurn, displayUsername: state.displayUsername });
+            return;
+        }
+        console.log('Your turn - revealing cell', { row, col });
     }
 
     cell.isRevealed = true;
@@ -1016,12 +1048,18 @@ function useHint() {
 function handleCanvasClick(e) {
     if (state.gameOver) return;
 
+    const CANVAS_BORDER_WIDTH = 3;
     const rect = e.target.getBoundingClientRect();
-    const x = e.clientX - rect.left;
-    const y = e.clientY - rect.top;
+    const x = e.clientX - rect.left - CANVAS_BORDER_WIDTH;
+    const y = e.clientY - rect.top - CANVAS_BORDER_WIDTH;
 
     const col = Math.floor(x / state.cellSize);
     const row = Math.floor(y / state.cellSize);
+
+    // Bounds checking
+    if (row < 0 || row >= state.difficulty.rows || col < 0 || col >= state.difficulty.cols) {
+        return;
+    }
 
     if (state.hintCell && state.hintCell.row === row && state.hintCell.col === col) {
         state.hintCell = null;
@@ -1034,12 +1072,18 @@ function handleCanvasRightClick(e) {
     e.preventDefault();
     if (state.gameOver) return;
 
+    const CANVAS_BORDER_WIDTH = 3;
     const rect = e.target.getBoundingClientRect();
-    const x = e.clientX - rect.left;
-    const y = e.clientY - rect.top;
+    const x = e.clientX - rect.left - CANVAS_BORDER_WIDTH;
+    const y = e.clientY - rect.top - CANVAS_BORDER_WIDTH;
 
     const col = Math.floor(x / state.cellSize);
     const row = Math.floor(y / state.cellSize);
+
+    // Bounds checking
+    if (row < 0 || row >= state.difficulty.rows || col < 0 || col >= state.difficulty.cols) {
+        return;
+    }
 
     toggleFlag(row, col);
 }
