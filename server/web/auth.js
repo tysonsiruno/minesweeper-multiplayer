@@ -160,9 +160,9 @@ async function verifyCurrentUser() {
 // ============================================================================
 
 /**
- * Register a new user account
+ * Register a new user account (with retry logic)
  */
-async function register(username, email, password) {
+async function register(username, email, password, retryCount = 0) {
     const errorEl = document.getElementById('register-error');
     const successEl = document.getElementById('register-success');
 
@@ -172,26 +172,48 @@ async function register(username, email, password) {
 
     // Client-side validation
     if (!username || username.length < 3) {
-        if (errorEl) errorEl.textContent = 'Username must be at least 3 characters';
+        if (errorEl) {
+            errorEl.textContent = 'Username must be at least 3 characters';
+            errorEl.style.display = 'block';
+        }
         return false;
     }
 
     if (!email || !email.includes('@')) {
-        if (errorEl) errorEl.textContent = 'Please enter a valid email address';
+        if (errorEl) {
+            errorEl.textContent = 'Please enter a valid email address';
+            errorEl.style.display = 'block';
+        }
         return false;
     }
 
     if (!password || password.length < 8) {
-        if (errorEl) errorEl.textContent = 'Password must be at least 8 characters';
+        if (errorEl) {
+            errorEl.textContent = 'Password must be at least 8 characters';
+            errorEl.style.display = 'block';
+        }
         return false;
     }
 
+    // Show loading state
+    if (errorEl && retryCount === 0) {
+        errorEl.textContent = 'Creating account...';
+        errorEl.style.color = '#667eea';
+        errorEl.style.display = 'block';
+    }
+
     try {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout
+
         const response = await fetch(`${AUTH_API}/register`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ username, email, password })
+            body: JSON.stringify({ username, email, password }),
+            signal: controller.signal
         });
+
+        clearTimeout(timeoutId);
 
         const data = await response.json();
 
@@ -200,6 +222,9 @@ async function register(username, email, password) {
                 successEl.textContent = data.message || 'Registration successful! You can now log in.';
                 successEl.style.display = 'block';
             }
+
+            // Hide error message
+            if (errorEl) errorEl.style.display = 'none';
 
             // Clear form
             const usernameEl = document.getElementById('register-username');
@@ -220,14 +245,29 @@ async function register(username, email, password) {
         } else {
             if (errorEl) {
                 errorEl.textContent = data.message || 'Registration failed';
+                errorEl.style.color = '#ff6b6b';
                 errorEl.style.display = 'block';
             }
             return false;
         }
     } catch (error) {
-        console.error('Registration error:', error);
+        console.error('Registration error (attempt ' + (retryCount + 1) + '):', error);
+
+        // Retry logic (max 2 retries)
+        if (retryCount < 2 && (error.name === 'AbortError' || error.name === 'TypeError')) {
+            console.log('Retrying registration in ' + ((retryCount + 1) * 1000) + 'ms...');
+            if (errorEl) {
+                errorEl.textContent = 'Connection issue, retrying... (' + (retryCount + 1) + '/2)';
+                errorEl.style.color = '#f39c12';
+            }
+            await new Promise(resolve => setTimeout(resolve, (retryCount + 1) * 1000));
+            return register(username, email, password, retryCount + 1);
+        }
+
+        // Failed after retries
         if (errorEl) {
-            errorEl.textContent = 'Network error. Please try again.';
+            errorEl.textContent = 'Network error. Please check your connection and try again.';
+            errorEl.style.color = '#ff6b6b';
             errorEl.style.display = 'block';
         }
         return false;
@@ -239,9 +279,9 @@ async function register(username, email, password) {
 // ============================================================================
 
 /**
- * Login with username/email and password
+ * Login with username/email and password (with retry logic)
  */
-async function login(usernameOrEmail, password, rememberMe = false) {
+async function login(usernameOrEmail, password, rememberMe = false, retryCount = 0) {
     const errorEl = document.getElementById('login-error');
 
     // Clear previous errors
@@ -252,7 +292,17 @@ async function login(usernameOrEmail, password, rememberMe = false) {
         return false;
     }
 
+    // Show loading state
+    if (errorEl && retryCount === 0) {
+        errorEl.textContent = 'Logging in...';
+        errorEl.style.color = '#667eea';
+        errorEl.style.display = 'block';
+    }
+
     try {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout
+
         const response = await fetch(`${AUTH_API}/login`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -260,8 +310,16 @@ async function login(usernameOrEmail, password, rememberMe = false) {
                 username_or_email: usernameOrEmail,
                 password: password,
                 remember_me: rememberMe
-            })
+            }),
+            signal: controller.signal
         });
+
+        clearTimeout(timeoutId);
+
+        // Check if response is OK
+        if (!response.ok) {
+            console.error('Login HTTP error:', response.status, response.statusText);
+        }
 
         const data = await response.json();
 
@@ -285,14 +343,29 @@ async function login(usernameOrEmail, password, rememberMe = false) {
         } else {
             if (errorEl) {
                 errorEl.textContent = data.message || 'Login failed';
+                errorEl.style.color = '#ff6b6b';
                 errorEl.style.display = 'block';
             }
             return false;
         }
     } catch (error) {
-        console.error('Login error:', error);
+        console.error('Login error (attempt ' + (retryCount + 1) + '):', error);
+
+        // Retry logic (max 2 retries)
+        if (retryCount < 2 && (error.name === 'AbortError' || error.name === 'TypeError')) {
+            console.log('Retrying login in ' + ((retryCount + 1) * 1000) + 'ms...');
+            if (errorEl) {
+                errorEl.textContent = 'Connection issue, retrying... (' + (retryCount + 1) + '/2)';
+                errorEl.style.color = '#f39c12';
+            }
+            await new Promise(resolve => setTimeout(resolve, (retryCount + 1) * 1000));
+            return login(usernameOrEmail, password, rememberMe, retryCount + 1);
+        }
+
+        // Failed after retries
         if (errorEl) {
-            errorEl.textContent = 'Network error. Please try again.';
+            errorEl.textContent = 'Network error. Please check your connection and try again.';
+            errorEl.style.color = '#ff6b6b';
             errorEl.style.display = 'block';
         }
         return false;
