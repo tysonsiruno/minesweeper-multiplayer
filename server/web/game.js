@@ -630,21 +630,29 @@ function connectToServer() {
                 console.log('Mines placed from player_action at:', data.row, data.col);
             }
 
-            const cell = state.board[data.row][data.col];
-            if (cell && !cell.isRevealed) {
-                cell.isRevealed = true;
-                state.totalGameClicks++;
-                drawBoard();
+            // ONLY sync cell reveals in Russian Roulette (turn-based mode)
+            // In Standard Race, each player plays their own board independently
+            if (state.gameMode === 'luck') {
+                const cell = state.board[data.row][data.col];
+                if (cell && !cell.isRevealed) {
+                    cell.isRevealed = true;
+                    state.totalGameClicks++;
+                    drawBoard();
+                }
             }
         } else if (data.action === 'flag' && data.row !== undefined && data.col !== undefined) {
             if (data.row < 0 || data.row >= state.difficulty.rows || data.col < 0 || data.col >= state.difficulty.cols) {
                 console.error('player_action out of bounds:', data);
                 return;
             }
-            const cell = state.board[data.row][data.col];
-            if (cell && !cell.isRevealed) {
-                cell.isFlagged = !cell.isFlagged;
-                drawBoard();
+
+            // ONLY sync flags in Russian Roulette mode
+            if (state.gameMode === 'luck') {
+                const cell = state.board[data.row][data.col];
+                if (cell && !cell.isRevealed) {
+                    cell.isFlagged = !cell.isFlagged;
+                    drawBoard();
+                }
             }
         }
     });
