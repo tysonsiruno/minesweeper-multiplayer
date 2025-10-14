@@ -177,10 +177,15 @@ function setupEventListeners() {
                 return;
             }
 
-            // Check if we're in solo or multiplayer flow
-            if (state.socket && state.socket.connected) {
+            // Check if we're already in a room (post-game mode selection)
+            if (state.roomCode && state.socket && state.socket.connected) {
+                // Change mode in existing room
+                state.socket.emit('change_game_mode', { game_mode: mode });
+            } else if (state.socket && state.socket.connected) {
+                // Create new room
                 createRoom(mode);
             } else {
+                // Solo mode
                 startSoloGame(mode);
             }
         }, { passive: false });
@@ -200,10 +205,15 @@ function setupEventListeners() {
                 return;
             }
 
-            // Check if we're in solo or multiplayer flow
-            if (state.socket && state.socket.connected) {
+            // Check if we're already in a room (post-game mode selection)
+            if (state.roomCode && state.socket && state.socket.connected) {
+                // Change mode in existing room
+                state.socket.emit('change_game_mode', { game_mode: mode });
+            } else if (state.socket && state.socket.connected) {
+                // Create new room
                 createRoom(mode);
             } else {
+                // Solo mode
                 startSoloGame(mode);
             }
         });
@@ -248,10 +258,15 @@ function setupEventListeners() {
             state.timebombDifficulty = difficulty;
             console.log('Difficulty selected (TOUCH):', difficulty);
 
-            // Check if we're in solo or multiplayer flow
-            if (state.socket && state.socket.connected) {
+            // Check if we're already in a room (post-game mode selection)
+            if (state.roomCode && state.socket && state.socket.connected) {
+                // Change mode in existing room
+                state.socket.emit('change_game_mode', { game_mode: 'timebomb' });
+            } else if (state.socket && state.socket.connected) {
+                // Create new room
                 createRoom('timebomb');
             } else {
+                // Solo mode
                 startSoloGame('timebomb');
             }
         }, { passive: false });
@@ -266,10 +281,15 @@ function setupEventListeners() {
             state.timebombDifficulty = difficulty;
             console.log('Difficulty selected (CLICK):', difficulty);
 
-            // Check if we're in solo or multiplayer flow
-            if (state.socket && state.socket.connected) {
+            // Check if we're already in a room (post-game mode selection)
+            if (state.roomCode && state.socket && state.socket.connected) {
+                // Change mode in existing room
+                state.socket.emit('change_game_mode', { game_mode: 'timebomb' });
+            } else if (state.socket && state.socket.connected) {
+                // Create new room
                 createRoom('timebomb');
             } else {
+                // Solo mode
                 startSoloGame('timebomb');
             }
         });
@@ -308,9 +328,18 @@ function setupEventListeners() {
     document.getElementById('result-ok-btn').addEventListener('click', () => {
         document.getElementById('result-overlay').classList.remove('active');
 
-        // In multiplayer, return to waiting room (don't leave room)
+        // In multiplayer, host picks next mode, others wait
         if (state.mode === 'multiplayer') {
-            showWaitingRoom();
+            // Check if we're the host (first player in the room)
+            const isHost = state.players.length > 0 && state.players[0].username === state.displayUsername;
+
+            if (isHost) {
+                // Host goes to mode selection
+                showScreen('gamemode-screen');
+            } else {
+                // Non-host goes to waiting room
+                showWaitingRoom();
+            }
         }
     });
 
@@ -922,8 +951,8 @@ function resetGame() {
     // Initialize Time Bomb mode countdown
     if (state.gameMode === 'timebomb') {
         state.timeRemaining = state.timebombStartTime[state.timebombDifficulty];
-        // ICantLose cheat: infinite time (SOLO MODE ONLY)
-        if (state.username.toLowerCase() === 'icantlose' && state.mode === 'solo') {
+        // ICantLose cheat: infinite time (works in all modes)
+        if (state.username.toLowerCase() === 'icantlose') {
             state.timeRemaining = 9999;
         }
     }
@@ -1012,6 +1041,9 @@ function revealCell(row, col, isUserClick = true) {
             return;
         }
         console.log('Your turn - revealing cell', { row, col });
+        // Immediately clear turn to prevent double-clicking before server response
+        state.currentTurn = null;
+        updateTurnIndicator();
     }
 
     cell.isRevealed = true;
@@ -1030,17 +1062,16 @@ function revealCell(row, col, isUserClick = true) {
     }
 
     // Time Bomb: Add time bonus ONLY for direct user clicks (not flood fill)
-    // Skip time bonus for ICantLose cheat in solo mode only
-    const skipTimeBonus = state.username.toLowerCase() === 'icantlose' && state.mode === 'solo';
-    if (state.gameMode === 'timebomb' && !cell.isMine && isUserClick && !skipTimeBonus) {
+    // Skip time bonus for ICantLose cheat (they have infinite time already)
+    if (state.gameMode === 'timebomb' && !cell.isMine && isUserClick && state.username.toLowerCase() !== 'icantlose') {
         state.timeRemaining += state.timebombTimeBonus[state.timebombDifficulty];
         updateTurnIndicator();
     }
 
     if (cell.isMine) {
-        // ICantLose cheat: Skip mine death and remove the bomb (SOLO MODE ONLY)
-        // In multiplayer, cheating breaks the game for everyone, so it's disabled
-        if (state.username.toLowerCase() === 'icantlose' && state.mode === 'solo') {
+        // ICantLose cheat: Skip mine death and remove the bomb
+        // Works in all modes for trolling purposes - let them figure it out!
+        if (state.username.toLowerCase() === 'icantlose') {
             // Just reveal the mine but don't die - convert it to a safe tile
             cell.isMine = false;
             cell.adjacentMines = 0;
@@ -1131,10 +1162,8 @@ function toggleFlag(row, col) {
     cell.isFlagged = !cell.isFlagged;
     state.flagsPlaced += cell.isFlagged ? 1 : -1;
 
-    // Time Bomb: Add +1 second for placing flag (not removing)
-    // Skip time bonus for ICantLose cheat in solo mode only
-    const skipFlagBonus = state.username.toLowerCase() === 'icantlose' && state.mode === 'solo';
-    if (state.gameMode === 'timebomb' && cell.isFlagged && !wasFlagged && !skipFlagBonus) {
+    // Time Bomb: Add +1 second for placing flag (not removing, not for cheat)
+    if (state.gameMode === 'timebomb' && cell.isFlagged && !wasFlagged && state.username.toLowerCase() !== 'icantlose') {
         state.timeRemaining += 1;
         updateTurnIndicator();
     }

@@ -710,6 +710,53 @@ def handle_leave_room():
     if request.sid in player_sessions:
         del player_sessions[request.sid]
 
+@socketio.on('change_game_mode')
+def handle_change_game_mode(data):
+    """Change game mode for existing room (host only)"""
+    if not data:
+        return
+
+    if request.sid not in player_sessions:
+        return
+
+    session = player_sessions[request.sid]
+    room_code = session["room_code"]
+
+    if room_code not in game_rooms:
+        return
+
+    room = game_rooms[room_code]
+
+    # Only host can change mode
+    if room["host"] != session["username"]:
+        emit('error', {"message": "Only host can change game mode"})
+        return
+
+    # Get and validate new game mode
+    new_mode = sanitize_input(data.get("game_mode", "standard"), 20)
+
+    # Update room settings
+    room["game_mode"] = new_mode
+    room["board_seed"] = secrets.randbelow(1000000)  # New seed for new game
+    room["current_turn"] = session["username"] if new_mode == "luck" else None
+
+    # Auto-ready all players and start immediately
+    for player in room["players"]:
+        player["ready"] = True
+
+    room["status"] = "playing"
+
+    # Notify all players about mode change and game start
+    emit('game_start', {
+        "difficulty": room["difficulty"],
+        "board_seed": room["board_seed"],
+        "game_mode": new_mode,
+        "current_turn": room.get("current_turn"),
+        "players": room["players"]
+    }, room=room_code)
+
+    print(f"Room {room_code} mode changed to {new_mode} by host {session['username']}")
+
 @socketio.on('player_ready')
 def handle_player_ready(data):
     """Mark player as ready to start"""
