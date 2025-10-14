@@ -27,14 +27,14 @@ body {
 
 #app {
     width: 100%;
-    max-width: 1400px;
+    max-width: 100%; /* Allow full width for hard mode */
     padding: 20px;
     /* RESPONSIVENESS FIX: Allow scrolling within app container only */
-    overflow-y: auto;
+    overflow: auto; /* Allow both horizontal and vertical scrolling */
     height: 100%;
     -webkit-overflow-scrolling: touch;
     /* RESPONSIVENESS FIX: Prevent bounce within app */
-    overscroll-behavior-y: contain;
+    overscroll-behavior: contain;
 }
 
 /* Screen Management */
@@ -310,6 +310,9 @@ input[type="text"]:focus {
     /* RESPONSIVENESS FIX: Prevent bounce on container */
     overscroll-behavior: contain;
     -webkit-overflow-scrolling: auto;
+    max-width: 100%; /* Allow full width for hard mode */
+    width: fit-content; /* Size to content */
+    margin: 0 auto; /* Center the container */
 }
 
 .game-header {
@@ -359,9 +362,13 @@ input[type="text"]:focus {
     max-height: calc(100vh - 200px); /* Fit in viewport */
 }
 
-@media (max-width: 1000px) {
+@media (max-width: 1200px) {
     .game-content {
         flex-direction: column;
+    }
+
+    .game-sidebar {
+        width: 100%;
     }
 }
 
@@ -374,7 +381,8 @@ input[type="text"]:focus {
     overscroll-behavior: none;
     -webkit-overflow-scrolling: auto;
     touch-action: none; /* No gestures on canvas container */
-    max-height: calc(100vh - 250px); /* Ensure it fits in viewport */
+    max-height: calc(100vh - 200px); /* Ensure it fits in viewport */
+    max-width: 100%; /* Allow full width for hard mode */
     overflow: auto; /* Allow scrolling if needed */
 }
 
@@ -409,12 +417,6 @@ input[type="text"]:focus {
     color: #333;
     font-weight: 600;
     margin-bottom: 15px;
-}
-
-@media (max-width: 1000px) {
-    .game-sidebar {
-        width: 100%;
-    }
 }
 
 .leaderboard {

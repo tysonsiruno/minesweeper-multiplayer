@@ -1287,29 +1287,45 @@ function initCanvas() {
         return;
     }
 
-    // Calculate responsive cell size based on screen size
-    const maxWidth = Math.max(100, Math.min(window.innerWidth - 40, 700)); // Min 100px, max 700px
-    const maxHeight = Math.max(100, Math.min(window.innerHeight - 250, 700)); // More vertical space
-
+    // Calculate responsive cell size based on screen size and board size
     // Validate difficulty values
     const rows = Math.max(1, state.difficulty.rows || 16);
     const cols = Math.max(1, state.difficulty.cols || 16);
+
+    // Adaptive max dimensions based on board size
+    // Hard mode (30x16) needs more width, Easy (9x9) can use larger cells
+    let maxWidth, maxHeight;
+
+    if (cols <= 10) {
+        // Easy mode: allow larger cells and smaller canvas
+        maxWidth = Math.min(window.innerWidth - 40, 500);
+        maxHeight = Math.min(window.innerHeight - 200, 500);
+    } else if (cols >= 25) {
+        // Hard mode: need much wider canvas
+        maxWidth = Math.min(window.innerWidth - 40, 1200);
+        maxHeight = Math.min(window.innerHeight - 200, 600);
+    } else {
+        // Medium mode: balanced
+        maxWidth = Math.min(window.innerWidth - 40, 800);
+        maxHeight = Math.min(window.innerHeight - 200, 800);
+    }
 
     // Calculate cell size that fits screen
     const cellSizeByWidth = Math.floor(maxWidth / cols);
     const cellSizeByHeight = Math.floor(maxHeight / rows);
 
-    // BUG #238 FIX: Use the smaller dimension to ensure it fits screen
-    // Don't enforce minimum cell size if it would overflow screen
-    // Allow 10px minimum for very large boards on small screens, max 40px
-    const calculatedSize = Math.min(cellSizeByWidth, cellSizeByHeight, 40);
-    state.cellSize = Math.max(10, calculatedSize);
+    // Use the smaller dimension to ensure it fits screen
+    // Allow 15px minimum for readability, max 50px for easy mode
+    const calculatedSize = Math.min(cellSizeByWidth, cellSizeByHeight);
+    state.cellSize = Math.max(15, Math.min(calculatedSize, 50));
 
-    const width = Math.max(100, cols * state.cellSize); // Min 100px
+    const width = Math.max(100, cols * state.cellSize);
     const height = Math.max(100, rows * state.cellSize);
 
     canvas.width = width;
     canvas.height = height;
+
+    console.log(`Canvas initialized: ${cols}x${rows}, cellSize: ${state.cellSize}px, canvas: ${width}x${height}px`);
 }
 
 function handleNewGame() {
