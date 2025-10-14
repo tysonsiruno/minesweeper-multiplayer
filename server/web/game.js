@@ -13,6 +13,7 @@ const state = {
     players: [],
     gameStarted: false,
     currentTurn: null,
+    seededRandom: null, // Store seeded random for multiplayer
 
     // Game variables
     difficulty: { name: 'Medium', rows: 16, cols: 16, mines: 40 },
@@ -306,6 +307,12 @@ function setupEventListeners() {
     document.getElementById('quit-btn').addEventListener('click', quitGame);
     document.getElementById('result-ok-btn').addEventListener('click', () => {
         document.getElementById('result-overlay').classList.remove('active');
+
+        // In multiplayer, return to lobby after game ends
+        if (state.mode === 'multiplayer') {
+            leaveRoom();
+            showScreen('lobby-screen');
+        }
     });
 
     document.getElementById('shortcuts-ok-btn').addEventListener('click', () => {
@@ -605,6 +612,24 @@ function connectToServer() {
                 console.error('player_action out of bounds:', data);
                 return;
             }
+
+            // SYNC FIX: If this is the first click in multiplayer, place mines with the same exclusion zone
+            if (state.firstClick && state.mode === 'multiplayer') {
+                state.firstClick = false;
+                state.startTime = Date.now();
+
+                // Start appropriate timer based on game mode
+                if (state.gameMode === 'timebomb') {
+                    state.timerInterval = setInterval(updateTimeBombTimer, 1000);
+                } else {
+                    state.timerInterval = setInterval(updateTimer, 1000);
+                }
+
+                // Place mines using the first player's click coordinates for consistent board
+                placeMines(data.row, data.col);
+                console.log('Mines placed from player_action at:', data.row, data.col);
+            }
+
             const cell = state.board[data.row][data.col];
             if (cell && !cell.isRevealed) {
                 cell.isRevealed = true;
@@ -777,23 +802,14 @@ function startMultiplayerGame(boardSeed) {
     document.getElementById('leaderboard-title').textContent = modeTitle;
 
     // Seed random for consistent board across players
-    const seededRandom = (() => {
+    state.seededRandom = (() => {
         const m = 2 ** 35 - 31;
         const a = 185852;
         let s = boardSeed % m;
         return () => (s = s * a % m) / m;
     })();
 
-    // Override Math.random for this game
-    const originalRandom = Math.random;
-    Math.random = seededRandom;
-
     resetGame();
-
-    // Restore original Math.random after board generation
-    setTimeout(() => {
-        Math.random = originalRandom;
-    }, 100);
     updateTurnIndicator();
     loadGlobalLeaderboard(); // Load global leaderboard for this mode
 }
@@ -937,9 +953,12 @@ function placeMines(excludeRow, excludeCol) {
         }
     }
 
+    // Use seeded random for multiplayer, Math.random for solo
+    const getRandom = state.mode === 'multiplayer' && state.seededRandom ? state.seededRandom : Math.random;
+
     while (minesPlaced < state.difficulty.mines) {
-        const row = Math.floor(Math.random() * state.difficulty.rows);
-        const col = Math.floor(Math.random() * state.difficulty.cols);
+        const row = Math.floor(getRandom() * state.difficulty.rows);
+        const col = Math.floor(getRandom() * state.difficulty.cols);
 
         if (!state.board[row][col].isMine && !excludeCells.has(`${row},${col}`)) {
             state.board[row][col].isMine = true;
@@ -1005,8 +1024,8 @@ function revealCell(row, col, isUserClick = true) {
     }
 
     if (cell.isMine) {
-        // ICantLose cheat: Skip mine death
-        if (state.username.toLowerCase() === 'icantlose') {
+        // ICantLose cheat: Skip mine death (SOLO MODE ONLY - cheat breaks multiplayer sync)
+        if (state.username.toLowerCase() === 'icantlose' && state.mode === 'solo') {
             // Just reveal the mine but don't die
             cell.isMine = false;
             cell.adjacentMines = 0;
@@ -1457,8 +1476,8 @@ function showGameResult(won, score, customMessage) {
 
     overlay.classList.add('active');
 
-    // Submit score to leaderboard for solo games
-    if (state.mode === 'solo' && score > 0) {
+    // Submit score to leaderboard for both solo and multiplayer games
+    if (score > 0) {
         submitScoreToBackend(won, score);
     }
 }
