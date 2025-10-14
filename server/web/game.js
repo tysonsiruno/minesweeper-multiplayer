@@ -1293,21 +1293,24 @@ function initCanvas() {
     const cols = Math.max(1, state.difficulty.cols || 16);
 
     // Adaptive max dimensions based on board size
-    // Hard mode (30x16) needs more width, Easy (9x9) can use larger cells
+    // Account for sidebar (250px) + gap (20px) + padding (60px) = 330px
+    const sidebarSpace = 360;
+    const availableWidth = window.innerWidth - sidebarSpace;
+
     let maxWidth, maxHeight;
 
     if (cols <= 10) {
         // Easy mode: allow larger cells and smaller canvas
-        maxWidth = Math.min(window.innerWidth - 40, 500);
-        maxHeight = Math.min(window.innerHeight - 200, 500);
+        maxWidth = Math.min(availableWidth, 500);
+        maxHeight = Math.min(window.innerHeight - 250, 500);
     } else if (cols >= 25) {
         // Hard mode: need much wider canvas
-        maxWidth = Math.min(window.innerWidth - 40, 1200);
-        maxHeight = Math.min(window.innerHeight - 200, 600);
+        maxWidth = Math.min(availableWidth, 900);
+        maxHeight = Math.min(window.innerHeight - 250, 600);
     } else {
         // Medium mode: balanced
-        maxWidth = Math.min(window.innerWidth - 40, 800);
-        maxHeight = Math.min(window.innerHeight - 200, 800);
+        maxWidth = Math.min(availableWidth, 700);
+        maxHeight = Math.min(window.innerHeight - 250, 700);
     }
 
     // Calculate cell size that fits screen

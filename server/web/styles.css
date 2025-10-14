@@ -310,8 +310,8 @@ input[type="text"]:focus {
     /* RESPONSIVENESS FIX: Prevent bounce on container */
     overscroll-behavior: contain;
     -webkit-overflow-scrolling: auto;
-    max-width: 100%; /* Allow full width for hard mode */
-    width: fit-content; /* Size to content */
+    max-width: 95vw; /* Don't overflow viewport */
+    width: 100%; /* Full width within constraints */
     margin: 0 auto; /* Center the container */
 }
 
@@ -359,7 +359,8 @@ input[type="text"]:focus {
     display: flex;
     gap: 20px;
     align-items: flex-start;
-    /* Removed max-height constraint to allow proper board sizing */
+    width: 100%;
+    justify-content: center;
 }
 
 @media (max-width: 1200px) {
@@ -373,17 +374,15 @@ input[type="text"]:focus {
 }
 
 .game-board-container {
-    flex: 1;
+    flex: 0 1 auto; /* Don't grow, allow shrink, auto size */
     display: flex;
     justify-content: center;
-    align-items: center; /* Center vertically */
+    align-items: flex-start;
     /* RESPONSIVENESS FIX: Prevent any bounce on canvas container */
     overscroll-behavior: none;
     -webkit-overflow-scrolling: auto;
     touch-action: none; /* No gestures on canvas container */
-    min-height: 400px; /* Ensure minimum board space */
-    max-width: 100%; /* Allow full width for hard mode */
-    overflow: visible; /* Let canvas size naturally */
+    padding: 10px;
 }
 
 #game-canvas {
@@ -409,10 +408,11 @@ input[type="text"]:focus {
 */
 
 .game-sidebar {
-    width: 250px;
+    flex: 0 0 250px; /* Don't grow or shrink, fixed 250px */
     background: rgba(102, 126, 234, 0.1);
     border-radius: 15px;
     padding: 20px;
+    min-width: 250px;
 }
 
 .game-sidebar h3 {
