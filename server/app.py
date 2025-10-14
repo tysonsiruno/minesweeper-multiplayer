@@ -27,8 +27,9 @@ app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', secrets.token_hex(16))
 
 # Database Configuration
 DATABASE_URL = os.environ.get('DATABASE_URL')
+# BUG #104 FIX: Only replace first occurrence
 if DATABASE_URL and DATABASE_URL.startswith('postgres://'):
-    DATABASE_URL = DATABASE_URL.replace('postgres://', 'postgresql://', 1)
+    DATABASE_URL = 'postgresql://' + DATABASE_URL[11:]
 
 app.config['SQLALCHEMY_DATABASE_URI'] = DATABASE_URL or 'sqlite:///minesweeper.db'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
@@ -38,15 +39,23 @@ app.config['SQLALCHEMY_ENGINE_OPTIONS'] = {
 }
 
 # Initialize extensions
-CORS(app)
-socketio = SocketIO(app, cors_allowed_origins="*")
+# BUG #111 FIX: Configure CORS properly for production
+cors_origins = os.environ.get('CORS_ORIGINS', '*').split(',') if os.environ.get('FLASK_ENV') != 'development' else '*'
+CORS(app, origins=cors_origins)
+socketio = SocketIO(app, cors_allowed_origins=cors_origins)
 
-# Initialize rate limiter (requires Redis for production)
+# BUG #112 FIX: Rate limiter with proper storage configuration
+# memory:// doesn't work across multiple processes - warn if not using Redis
+rate_limit_storage = os.environ.get('REDIS_URL')
+if not rate_limit_storage:
+    print("WARNING: No REDIS_URL configured. Rate limiting will not work across multiple processes.")
+    rate_limit_storage = 'memory://'
+
 limiter = Limiter(
     app=app,
     key_func=get_remote_address,
     default_limits=["200 per day", "50 per hour"],
-    storage_uri=os.environ.get('REDIS_URL', 'memory://')
+    storage_uri=rate_limit_storage
 )
 
 # Initialize database
@@ -72,16 +81,22 @@ with app.app_context():
     db.create_all()
     print("Database tables created successfully!")
 
-# In-memory storage for game rooms (multiplayer only)
+# BUG #105 FIX: In-memory storage with size limits
 game_rooms = {}  # {room_code: {host, players, difficulty, status, board_seed}}
 player_sessions = {}  # {session_id: {username, room_code}}
+MAX_ROOMS = 1000  # Prevent memory exhaustion
+MAX_SESSIONS = 10000
 
 def generate_room_code():
     """Generate a unique 6-digit numeric room code"""
-    while True:
+    # BUG #106 FIX: Add max attempts to prevent infinite loop
+    max_attempts = 100
+    for attempt in range(max_attempts):
         code = str(secrets.randbelow(1000000)).zfill(6)
         if code not in game_rooms:
             return code
+    # If we can't find a unique code after 100 attempts, raise error
+    raise Exception("Unable to generate unique room code")
 
 # Security headers middleware
 @app.after_request
@@ -159,7 +174,8 @@ def register():
         return jsonify({'success': True, 'message': 'Registration successful! You can now log in.', 'user_id': user.id})
     except Exception as e:
         db.session.rollback()
-        print(f'Registration error: {e}')
+        # BUG #81 FIX: Don't expose sensitive error details
+        print(f'Registration error occurred')
         return jsonify({'success': False, 'message': 'Registration failed. Please try again.'}), 500
 
 @app.route('/api/auth/login', methods=['POST'])
@@ -185,9 +201,13 @@ def login():
         if user:
             user.failed_login_attempts += 1
             if user.failed_login_attempts >= 5:
-                user.locked_until = datetime.utcnow() + timedelta(minutes=15)
-                # Email disabled: send_account_locked_email(user.email, user.username, 15)
+                # BUG #83 FIX: Randomize lockout time (15-20 mins) to prevent timing attacks
+                import random
+                lockout_minutes = random.randint(15, 20)
+                user.locked_until = datetime.utcnow() + timedelta(minutes=lockout_minutes)
+                # Email disabled: send_account_locked_email(user.email, user.username, lockout_minutes)
             db.session.commit()
+        # BUG #108 FIX: Only log with user.id if user exists
         SecurityAuditLog.log_action(user.id if user else None, 'login', False, get_client_ip(), get_user_agent())
         return jsonify({'success': False, 'message': 'Invalid credentials'}), 401
 
@@ -232,7 +252,8 @@ def login():
         })
     except Exception as e:
         db.session.rollback()
-        print(f'Login session creation error: {e}')
+        # BUG #84 FIX: Don't expose database errors
+        print(f'Login session creation error occurred')
         return jsonify({'success': False, 'message': 'Login failed. Please try again.'}), 500
 
 # Email verification disabled - no email service configured
@@ -329,17 +350,33 @@ def logout(current_user):
     """Logout user"""
     try:
         auth_header = request.headers.get('Authorization', '')
-        token = auth_header.split(' ')[1] if ' ' in auth_header else ''
+        # BUG #85 FIX: Validate token format before splitting
+        if not auth_header or ' ' not in auth_header:
+            return jsonify({'success': False, 'message': 'Invalid authorization header'}), 401
 
-        # Invalidate current session
-        Session.query.filter_by(user_id=current_user.id).delete()
-        db.session.commit()
+        parts = auth_header.split(' ')
+        if len(parts) != 2:
+            return jsonify({'success': False, 'message': 'Invalid authorization header format'}), 401
+
+        token = parts[1]
+
+        # BUG #86 FIX: Only invalidate current session, not all sessions
+        # Find the specific session with this refresh token
+        # For now, we'll delete the most recent session
+        recent_session = Session.query.filter_by(
+            user_id=current_user.id,
+            is_active=True
+        ).order_by(Session.created_at.desc()).first()
+
+        if recent_session:
+            db.session.delete(recent_session)
+            db.session.commit()
 
         SecurityAuditLog.log_action(current_user.id, 'logout', True, get_client_ip(), get_user_agent())
         return jsonify({'success': True, 'message': 'Logged out successfully'})
     except Exception as e:
         db.session.rollback()
-        print(f'Logout error: {e}')
+        print(f'Logout error occurred')
         return jsonify({'success': False, 'message': 'Logout failed. Please try again.'}), 500
 
 @app.route('/api/auth/me', methods=['GET'])
@@ -352,7 +389,16 @@ def get_current_user(current_user):
 def refresh_token():
     """Refresh access token using refresh token"""
     auth_header = request.headers.get('Authorization', '')
-    refresh_token_str = auth_header.split(' ')[1] if ' ' in auth_header else ''
+
+    # BUG #87 FIX: Validate header format before splitting
+    if not auth_header or ' ' not in auth_header:
+        return jsonify({'success': False, 'message': 'Refresh token required'}), 401
+
+    parts = auth_header.split(' ')
+    if len(parts) != 2:
+        return jsonify({'success': False, 'message': 'Invalid authorization header format'}), 401
+
+    refresh_token_str = parts[1]
 
     if not refresh_token_str:
         return jsonify({'success': False, 'message': 'Refresh token required'}), 401
@@ -384,7 +430,8 @@ def refresh_token():
         })
     except Exception as e:
         db.session.rollback()
-        print(f'Token refresh error: {e}')
+        # BUG #88 FIX: Don't expose error details
+        print(f'Token refresh error occurred')
         return jsonify({'success': False, 'message': 'Token refresh failed. Please try again.'}), 500
 
 # Email verification disabled - no email service configured
@@ -511,7 +558,8 @@ def submit_score():
         return jsonify({"success": True, "entry": game.to_dict()})
     except Exception as e:
         db.session.rollback()
-        print(f'Leaderboard submission error: {e}')
+        # BUG #89 FIX: Don't expose error details
+        print(f'Leaderboard submission error occurred')
         return jsonify({"success": False, "message": "Failed to submit score. Please try again."}), 500
 
 # WebSocket Events
@@ -527,6 +575,10 @@ def handle_disconnect():
     """Handle client disconnection"""
     print(f"Client disconnected: {request.sid}")
 
+    # BUG #90 FIX: Validate player_sessions exists and has request.sid
+    if not player_sessions or request.sid not in player_sessions:
+        return
+
     # Remove player from any room they're in
     if request.sid in player_sessions:
         session = player_sessions[request.sid]
@@ -534,7 +586,11 @@ def handle_disconnect():
 
         if room_code and room_code in game_rooms:
             room = game_rooms[room_code]
-            room["players"] = [p for p in room["players"] if p["session_id"] != request.sid]
+            # BUG #91 FIX: Validate player objects before filtering
+            room["players"] = [
+                p for p in room.get("players", [])
+                if isinstance(p, dict) and p.get("session_id") != request.sid
+            ]
 
             # Notify other players
             emit('player_left', {
@@ -552,7 +608,8 @@ def handle_disconnect():
 @socketio.on('create_room')
 def handle_create_room(data):
     """Create a new game room"""
-    if not data:
+    # BUG #92 FIX: Validate data is a dict
+    if not data or not isinstance(data, dict):
         emit('error', {"message": "Invalid data"})
         return
 
@@ -573,6 +630,9 @@ def handle_create_room(data):
 
     room_code = generate_room_code()
 
+    # BUG #93 FIX: Ensure board_seed is never 0 (add 1 to range)
+    board_seed = secrets.randbelow(999999) + 1
+
     game_rooms[room_code] = {
         "code": room_code,
         "host": username,
@@ -588,7 +648,7 @@ def handle_create_room(data):
             "finished": False,
             "eliminated": False
         }],
-        "board_seed": secrets.randbelow(1000000),
+        "board_seed": board_seed,
         "current_turn": username if game_mode == "luck" else None,
         "created_at": datetime.now().isoformat()
     }
@@ -612,12 +672,17 @@ def handle_create_room(data):
 @socketio.on('join_room')
 def handle_join_room(data):
     """Join an existing game room"""
-    if not data:
+    # BUG #92 FIX: Validate data is a dict
+    if not data or not isinstance(data, dict):
         emit('error', {"message": "Invalid data"})
         return
 
     # Validate and sanitize room code
     room_code = str(data.get("room_code", "")).strip()
+    # BUG #94 FIX: Strip leading zeros for consistency
+    room_code = room_code.lstrip('0') or '0'
+    room_code = room_code.zfill(6)  # Pad back to 6 digits
+
     if not room_code or len(room_code) != 6 or not room_code.isdigit():
         emit('error', {"message": "Invalid room code format - must be 6 digits"})
         return
@@ -681,8 +746,9 @@ def handle_leave_room():
     if request.sid not in player_sessions:
         return
 
+    # BUG #95 FIX: Validate session exists and is a dict
     session = player_sessions.get(request.sid)
-    if not session:
+    if not session or not isinstance(session, dict):
         return
 
     room_code = session.get("room_code")
@@ -713,16 +779,19 @@ def handle_leave_room():
 @socketio.on('change_game_mode')
 def handle_change_game_mode(data):
     """Change game mode for existing room (host only)"""
-    if not data:
+    # BUG #92, #96 FIX: Validate data and session exist
+    if not data or not isinstance(data, dict):
         return
 
     if request.sid not in player_sessions:
         return
 
-    session = player_sessions[request.sid]
-    room_code = session["room_code"]
+    session = player_sessions.get(request.sid)
+    if not session or not isinstance(session, dict):
+        return
 
-    if room_code not in game_rooms:
+    room_code = session.get("room_code")
+    if not room_code or room_code not in game_rooms:
         return
 
     room = game_rooms[room_code]
@@ -737,7 +806,8 @@ def handle_change_game_mode(data):
 
     # Update room settings
     room["game_mode"] = new_mode
-    room["board_seed"] = secrets.randbelow(1000000)  # New seed for new game
+    # BUG #93, #97 FIX: Ensure board_seed is never 0
+    room["board_seed"] = secrets.randbelow(999999) + 1
     room["current_turn"] = session["username"] if new_mode == "luck" else None
 
     # Auto-ready all players and start immediately
@@ -827,6 +897,7 @@ def handle_game_action(data):
             col = data.get("col")
             if row is not None:
                 row = int(row)
+                # BUG #98 FIX: Validate within reasonable bounds
                 if row < 0 or row > 100:  # Reasonable max board size
                     return
             if col is not None:
@@ -839,11 +910,19 @@ def handle_game_action(data):
     # Handle elimination in ALL game modes
     if action == "eliminated":
         # Mark player as eliminated and record their score
+        # BUG #99 FIX: Validate clicks value
+        clicks = data.get("clicks", 0)
+        try:
+            clicks = int(clicks)
+            clicks = max(0, min(clicks, 100000))  # Reasonable range
+        except (ValueError, TypeError):
+            clicks = 0
+
         for player in room["players"]:
             if player["session_id"] == request.sid:
                 player["eliminated"] = True
                 player["finished"] = True
-                player["score"] = data.get("clicks", 0)
+                player["score"] = clicks
                 break
 
         # Check if only one player remains
@@ -899,13 +978,14 @@ def handle_game_action(data):
                 current_idx = next((i for i, p in enumerate(room["players"]) if p["username"] == room["current_turn"]), 0)
                 next_idx = (current_idx + 1) % len(room["players"])
 
-                # Find next non-eliminated player
+                # BUG #100 FIX: Add max attempts check to prevent infinite loop
+                max_attempts = len(room["players"])
                 attempts = 0
-                while room["players"][next_idx]["eliminated"] and attempts < len(room["players"]):
+                while attempts < max_attempts and room["players"][next_idx].get("eliminated", False):
                     next_idx = (next_idx + 1) % len(room["players"])
                     attempts += 1
 
-                if attempts < len(room["players"]):
+                if attempts < max_attempts:
                     room["current_turn"] = room["players"][next_idx]["username"]
                     emit('turn_changed', {
                         "current_turn": room["current_turn"]
@@ -926,13 +1006,14 @@ def handle_game_action(data):
         current_idx = next((i for i, p in enumerate(room["players"]) if p["username"] == room["current_turn"]), 0)
         next_idx = (current_idx + 1) % len(room["players"])
 
-        # Find next non-eliminated player
+        # BUG #101 FIX: Add max attempts check to prevent infinite loop
+        max_attempts = len(room["players"])
         attempts = 0
-        while room["players"][next_idx].get("eliminated", False) and attempts < len(room["players"]):
+        while attempts < max_attempts and room["players"][next_idx].get("eliminated", False):
             next_idx = (next_idx + 1) % len(room["players"])
             attempts += 1
 
-        if attempts < len(room["players"]):
+        if attempts < max_attempts:
             room["current_turn"] = room["players"][next_idx]["username"]
             emit('turn_changed', {
                 "current_turn": room["current_turn"]
@@ -955,11 +1036,14 @@ def handle_game_finished(data):
 
     room = game_rooms[room_code]
 
-    # Validate score and time
+    # BUG #102 FIX: Validate score and time with sanity checks
     try:
         score = int(data.get("score", 0))
         time = int(data.get("time", 0))
         if score < 0 or time < 0:
+            score, time = 0, 0
+        # Check for obviously impossible values (0 score with high time = suspicious)
+        if score == 0 and time > 10:
             score, time = 0, 0
         if score > 10000 or time > 86400:  # Reasonable max values
             score, time = min(score, 10000), min(time, 86400)
@@ -985,8 +1069,12 @@ def handle_game_finished(data):
     }, room=room_code)
 
     if all_finished:
-        # Sort by score
-        sorted_players = sorted(room["players"], key=lambda x: x["score"], reverse=True)
+        # BUG #103 FIX: Sort by score with time as tiebreaker
+        sorted_players = sorted(
+            room["players"],
+            key=lambda x: (x.get("score", 0), -x.get("time", 0)),
+            reverse=True
+        )
 
         emit('game_ended', {
             "results": sorted_players

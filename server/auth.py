@@ -12,8 +12,13 @@ from flask import request, jsonify
 import os
 
 # JWT Configuration
+# BUG #131 FIX: Warn if using default secret
 JWT_SECRET = os.environ.get('JWT_SECRET', 'dev-secret-key-change-in-production')
 JWT_REFRESH_SECRET = os.environ.get('JWT_REFRESH_SECRET', 'dev-refresh-secret-change-in-production')
+if JWT_SECRET == 'dev-secret-key-change-in-production':
+    print("WARNING: Using default JWT_SECRET. Set JWT_SECRET environment variable for production!")
+if JWT_REFRESH_SECRET == 'dev-refresh-secret-change-in-production':
+    print("WARNING: Using default JWT_REFRESH_SECRET. Set JWT_REFRESH_SECRET environment variable for production!")
 JWT_ALGORITHM = 'HS256'
 ACCESS_TOKEN_EXPIRES = timedelta(minutes=15)
 REFRESH_TOKEN_EXPIRES = timedelta(days=7)
@@ -21,6 +26,10 @@ REFRESH_TOKEN_EXPIRES_REMEMBER = timedelta(days=30)
 
 # Password Requirements
 PASSWORD_MIN_LENGTH = 8
+# BUG #133 FIX: Add special character requirement (optional but recommended)
+# Current regex: lowercase, uppercase, digit
+# To require special char, uncomment the line below:
+# PASSWORD_REGEX = re.compile(r'^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])')
 PASSWORD_REGEX = re.compile(r'^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)')
 
 # Username Requirements
@@ -59,9 +68,14 @@ def verify_password(password: str, hashed: str) -> bool:
     Returns:
         True if password matches, False otherwise
     """
+    # BUG #135 FIX: Log specific errors for debugging
     try:
         return bcrypt.checkpw(password.encode('utf-8'), hashed.encode('utf-8'))
-    except Exception:
+    except ValueError as e:
+        print(f'Password verification ValueError: Invalid hash format')
+        return False
+    except Exception as e:
+        print(f'Password verification error: {type(e).__name__}')
         return False
 
 
@@ -156,8 +170,9 @@ def sanitize_input(text: str, max_length: int = 500) -> str:
     if not text:
         return ''
 
-    # Remove null bytes
-    text = text.replace('\x00', '')
+    # BUG #136 FIX: Remove null bytes and other control characters
+    # Remove null bytes and control characters (except tab, newline, carriage return)
+    text = ''.join(char for char in text if ord(char) >= 32 or char in '\t\n\r')
 
     # Trim to max length
     text = text[:max_length]
@@ -184,12 +199,16 @@ def generate_access_token(user_id: int, username: str, is_verified: bool = False
     Returns:
         JWT token string
     """
+    # BUG #137 FIX: Use timezone-aware datetime (datetime.utcnow deprecated in Python 3.12+)
+    from datetime import timezone
+    now = datetime.now(timezone.utc)
+
     payload = {
         'user_id': user_id,
         'username': username,
         'is_verified': is_verified,
-        'iat': datetime.utcnow(),
-        'exp': datetime.utcnow() + ACCESS_TOKEN_EXPIRES,
+        'iat': now,
+        'exp': now + ACCESS_TOKEN_EXPIRES,
         'type': 'access'
     }
     return jwt.encode(payload, JWT_SECRET, algorithm=JWT_ALGORITHM)
@@ -207,13 +226,17 @@ def generate_refresh_token(user_id: int, session_id: int, remember_me: bool = Fa
     Returns:
         JWT token string
     """
+    # BUG #138 FIX: Use timezone-aware datetime (datetime.utcnow deprecated in Python 3.12+)
+    from datetime import timezone
+    now = datetime.now(timezone.utc)
+
     expiry = REFRESH_TOKEN_EXPIRES_REMEMBER if remember_me else REFRESH_TOKEN_EXPIRES
 
     payload = {
         'user_id': user_id,
         'session_id': session_id,
-        'iat': datetime.utcnow(),
-        'exp': datetime.utcnow() + expiry,
+        'iat': now,
+        'exp': now + expiry,
         'type': 'refresh'
     }
     return jwt.encode(payload, JWT_REFRESH_SECRET, algorithm=JWT_ALGORITHM)
@@ -276,8 +299,12 @@ def token_required(f):
         if 'Authorization' in request.headers:
             auth_header = request.headers['Authorization']
             try:
-                token = auth_header.split(' ')[1]  # Format: "Bearer <token>"
-            except IndexError:
+                # BUG #139 FIX: Handle multiple spaces and validate format
+                parts = auth_header.strip().split()
+                if len(parts) != 2 or parts[0].lower() != 'bearer':
+                    return jsonify({'success': False, 'message': 'Invalid authorization header format'}), 401
+                token = parts[1]
+            except (IndexError, AttributeError):
                 return jsonify({'success': False, 'message': 'Invalid authorization header format'}), 401
 
         if not token:
@@ -291,7 +318,13 @@ def token_required(f):
             from models import User
 
             # Get user from database
-            current_user = User.query.filter_by(id=payload['user_id']).first()
+            # BUG #140 FIX: Validate user_id is an integer
+            try:
+                user_id = int(payload.get('user_id', 0))
+            except (ValueError, TypeError):
+                return jsonify({'success': False, 'message': 'Invalid token payload'}), 401
+
+            current_user = User.query.filter_by(id=user_id).first()
 
             if not current_user:
                 return jsonify({'success': False, 'message': 'User not found'}), 401

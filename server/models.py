@@ -42,17 +42,21 @@ class User(db.Model):
 
     def to_dict(self):
         """Convert user to dictionary (exclude sensitive data)"""
+        # BUG #121 FIX: Validate total_games_played is not None and handle edge cases
+        total_games = self.total_games_played if self.total_games_played is not None else 0
+        total_wins = self.total_wins if self.total_wins is not None else 0
+
         return {
             'id': self.id,
             'username': self.username,
             'email': self.email,
             'is_verified': self.is_verified,
             'created_at': self.created_at.isoformat() if self.created_at else None,
-            'total_games_played': self.total_games_played,
-            'total_wins': self.total_wins,
-            'total_losses': self.total_losses,
-            'highest_score': self.highest_score,
-            'win_rate': round((self.total_wins / self.total_games_played * 100) if self.total_games_played > 0 else 0, 1)
+            'total_games_played': total_games,
+            'total_wins': total_wins,
+            'total_losses': self.total_losses if self.total_losses is not None else 0,
+            'highest_score': self.highest_score if self.highest_score is not None else 0,
+            'win_rate': round((total_wins / total_games * 100) if total_games > 0 else 0, 1)
         }
 
 
@@ -74,7 +78,12 @@ class EmailVerificationToken(db.Model):
 
     def is_expired(self):
         """Check if token is expired"""
-        return datetime.utcnow() > self.expires_at
+        # BUG #129, #130 FIX: Handle None expires_at and use consistent timezone
+        if self.expires_at is None:
+            return True
+        from datetime import timezone
+        now = datetime.now(timezone.utc) if self.expires_at.tzinfo else datetime.utcnow()
+        return now > self.expires_at
 
     def is_used(self):
         """Check if token has been used"""
@@ -100,7 +109,12 @@ class PasswordResetToken(db.Model):
 
     def is_expired(self):
         """Check if token is expired"""
-        return datetime.utcnow() > self.expires_at
+        # BUG #129, #130 FIX: Handle None expires_at and use consistent timezone
+        if self.expires_at is None:
+            return True
+        from datetime import timezone
+        now = datetime.now(timezone.utc) if self.expires_at.tzinfo else datetime.utcnow()
+        return now > self.expires_at
 
     def is_used(self):
         """Check if token has been used"""
@@ -123,7 +137,12 @@ class Session(db.Model):
 
     def is_expired(self):
         """Check if session is expired"""
-        return datetime.utcnow() > self.expires_at
+        # BUG #129, #130 FIX: Handle None expires_at and use consistent timezone
+        if self.expires_at is None:
+            return True
+        from datetime import timezone
+        now = datetime.now(timezone.utc) if self.expires_at.tzinfo else datetime.utcnow()
+        return now > self.expires_at
 
 
 class GameHistory(db.Model):
@@ -177,6 +196,7 @@ class SecurityAuditLog(db.Model):
     @staticmethod
     def log_action(user_id, action, success, ip_address=None, user_agent=None, details=None):
         """Log a security action"""
+        # BUG #123 FIX: Don't commit immediately - let caller control transaction
         log_entry = SecurityAuditLog(
             user_id=user_id,
             action=action,
@@ -186,5 +206,6 @@ class SecurityAuditLog(db.Model):
             details=details
         )
         db.session.add(log_entry)
-        db.session.commit()
+        # Don't commit - let the caller handle the transaction
+        # db.session.commit()
         return log_entry
