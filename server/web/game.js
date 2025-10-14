@@ -17,6 +17,12 @@ const state = {
 
     // Game variables
     difficulty: { name: 'Medium', rows: 16, cols: 16, mines: 40 },
+    boardDifficulty: 'medium', // 'easy', 'medium', 'hard' for standard/survival modes
+    boardDifficulties: {
+        easy: { name: 'Easy', rows: 9, cols: 9, mines: 10 },
+        medium: { name: 'Medium', rows: 16, cols: 16, mines: 40 },
+        hard: { name: 'Hard', rows: 30, cols: 16, mines: 99 }
+    },
     board: [],
     cellSize: 30,
     firstClick: true,
@@ -33,6 +39,7 @@ const state = {
     score: 0,
     timerInterval: null,
     survivalLevelTimeout: null, // BUG #49 FIX: Track survival level timeout
+    gameResultTimeout: null, // BUG #237 FIX: Track game result timeout for cleanup
     tilesClicked: 0, // Track tiles clicked for new scoring system
     totalGameClicks: 0, // For multiplayer: total clicks from all players
     soundEnabled: true, // Sound system toggle
@@ -174,12 +181,27 @@ function setupEventListeners() {
             const mode = e.target.closest('.mode-card').dataset.mode;
             console.log('Mode selected (TOUCH):', mode);
 
+            // Store the pending game mode for difficulty selection
+            state.pendingGameMode = mode;
+
             // Time Bomb mode needs difficulty selection first
             if (mode === 'timebomb') {
                 showScreen('timebomb-difficulty-screen');
                 return;
             }
 
+            // Standard and Survival modes need board difficulty selection
+            if (mode === 'standard' || mode === 'survival') {
+                // Update title based on mode
+                const titleEl = document.getElementById('board-difficulty-title');
+                if (titleEl) {
+                    titleEl.textContent = mode === 'standard' ? 'Standard - Choose Difficulty' : 'Survival - Choose Difficulty';
+                }
+                showScreen('board-difficulty-screen');
+                return;
+            }
+
+            // Russian Roulette doesn't need difficulty selection
             // Check if we're already in a room (post-game mode selection)
             if (state.roomCode && state.socket && state.socket.connected) {
                 // Change mode in existing room
@@ -202,12 +224,27 @@ function setupEventListeners() {
             const mode = e.target.closest('.mode-card').dataset.mode;
             console.log('Mode selected (CLICK):', mode);
 
+            // Store the pending game mode for difficulty selection
+            state.pendingGameMode = mode;
+
             // Time Bomb mode needs difficulty selection first
             if (mode === 'timebomb') {
                 showScreen('timebomb-difficulty-screen');
                 return;
             }
 
+            // Standard and Survival modes need board difficulty selection
+            if (mode === 'standard' || mode === 'survival') {
+                // Update title based on mode
+                const titleEl = document.getElementById('board-difficulty-title');
+                if (titleEl) {
+                    titleEl.textContent = mode === 'standard' ? 'Standard - Choose Difficulty' : 'Survival - Choose Difficulty';
+                }
+                showScreen('board-difficulty-screen');
+                return;
+            }
+
+            // Russian Roulette doesn't need difficulty selection
             // Check if we're already in a room (post-game mode selection)
             if (state.roomCode && state.socket && state.socket.connected) {
                 // Change mode in existing room
@@ -315,6 +352,116 @@ function setupEventListeners() {
             }
             e.preventDefault();
             console.log('Back to gamemode (CLICK)');
+            showScreen('gamemode-screen');
+        });
+    }
+
+    // Board difficulty selection for Standard/Survival modes - with proper mobile support
+    document.querySelectorAll('.select-board-difficulty').forEach(btn => {
+        btn.addEventListener('touchend', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            preventClickAfterTouch();
+            const boardDiff = e.target.closest('.mode-card').dataset.boardDifficulty;
+            state.boardDifficulty = boardDiff;
+            console.log('Board difficulty selected (TOUCH):', boardDiff);
+
+            // BUG #233 FIX: Validate difficulty exists before accessing
+            if (!state.boardDifficulties[boardDiff]) {
+                console.error('Invalid board difficulty:', boardDiff);
+                return;
+            }
+
+            // Apply the selected difficulty
+            state.difficulty = {
+                name: state.boardDifficulties[boardDiff].name,
+                rows: state.boardDifficulties[boardDiff].rows,
+                cols: state.boardDifficulties[boardDiff].cols,
+                mines: state.boardDifficulties[boardDiff].mines
+            };
+
+            // For survival mode, also update survivalBaseMines and survivalMineCount
+            if (state.pendingGameMode === 'survival') {
+                state.survivalBaseMines = state.boardDifficulties[boardDiff].mines;
+                state.survivalMineCount = state.survivalBaseMines;
+            }
+
+            const mode = state.pendingGameMode || 'standard';
+            // Check if we're already in a room (post-game mode selection)
+            if (state.roomCode && state.socket && state.socket.connected) {
+                // Change mode in existing room
+                state.socket.emit('change_game_mode', { game_mode: mode });
+            } else if (state.socket && state.socket.connected) {
+                // Create new room
+                createRoom(mode);
+            } else {
+                // Solo mode
+                startSoloGame(mode);
+            }
+        }, { passive: false });
+
+        btn.addEventListener('click', (e) => {
+            if (touchHandled) {
+                e.preventDefault();
+                return;
+            }
+            e.preventDefault();
+            const boardDiff = e.target.closest('.mode-card').dataset.boardDifficulty;
+            state.boardDifficulty = boardDiff;
+            console.log('Board difficulty selected (CLICK):', boardDiff);
+
+            // BUG #233 FIX: Validate difficulty exists before accessing
+            if (!state.boardDifficulties[boardDiff]) {
+                console.error('Invalid board difficulty:', boardDiff);
+                return;
+            }
+
+            // Apply the selected difficulty
+            state.difficulty = {
+                name: state.boardDifficulties[boardDiff].name,
+                rows: state.boardDifficulties[boardDiff].rows,
+                cols: state.boardDifficulties[boardDiff].cols,
+                mines: state.boardDifficulties[boardDiff].mines
+            };
+
+            // For survival mode, also update survivalBaseMines and survivalMineCount
+            if (state.pendingGameMode === 'survival') {
+                state.survivalBaseMines = state.boardDifficulties[boardDiff].mines;
+                state.survivalMineCount = state.survivalBaseMines;
+            }
+
+            const mode = state.pendingGameMode || 'standard';
+            // Check if we're already in a room (post-game mode selection)
+            if (state.roomCode && state.socket && state.socket.connected) {
+                // Change mode in existing room
+                state.socket.emit('change_game_mode', { game_mode: mode });
+            } else if (state.socket && state.socket.connected) {
+                // Create new room
+                createRoom(mode);
+            } else {
+                // Solo mode
+                startSoloGame(mode);
+            }
+        });
+    });
+
+    const backToGamemode2Btn = document.getElementById('back-to-gamemode2');
+    if (backToGamemode2Btn) {
+        backToGamemode2Btn.addEventListener('touchend', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            preventClickAfterTouch();
+            console.log('Back to gamemode2 (TOUCH)');
+            showScreen('gamemode-screen');
+        }, { passive: false });
+
+        backToGamemode2Btn.addEventListener('click', (e) => {
+            if (touchHandled) {
+                e.preventDefault();
+                return;
+            }
+            e.preventDefault();
+            console.log('Back to gamemode2 (CLICK)');
             showScreen('gamemode-screen');
         });
     }
@@ -555,6 +702,20 @@ function initializeUsername() {
 function startSoloGame(gameMode = 'standard') {
     state.mode = 'solo';
     state.gameMode = gameMode;
+
+    // BUG #231 FIX: Clear pending game mode after starting
+    state.pendingGameMode = null;
+
+    // BUG #232 FIX: Russian Roulette should always use medium difficulty (16x16, 40 mines)
+    if (gameMode === 'luck') {
+        state.difficulty = {
+            name: 'Medium',
+            rows: 16,
+            cols: 16,
+            mines: 40
+        };
+    }
+
     showScreen('game-screen');
     document.getElementById('username-display').textContent = state.displayUsername;
     document.getElementById('room-display').textContent = '';
@@ -572,9 +733,9 @@ function startSoloGame(gameMode = 'standard') {
     } else if (gameMode === 'timebomb') {
         document.getElementById('leaderboard-title').textContent = `Time Bomb - ${state.timebombDifficulty.toUpperCase()}`;
     } else if (gameMode === 'survival') {
-        document.getElementById('leaderboard-title').textContent = 'Survival - Level 1';
+        document.getElementById('leaderboard-title').textContent = `Survival - ${state.difficulty.name} - Level 1`;
     } else {
-        document.getElementById('leaderboard-title').textContent = 'Standard';
+        document.getElementById('leaderboard-title').textContent = `Standard - ${state.difficulty.name}`;
     }
 
     resetGame();
@@ -938,6 +1099,11 @@ function leaveRoom() {
         clearTimeout(state.hintTimeout);
         state.hintTimeout = null;
     }
+    // BUG #237 FIX: Clear game result timeout
+    if (state.gameResultTimeout) {
+        clearTimeout(state.gameResultTimeout);
+        state.gameResultTimeout = null;
+    }
 
     // Re-enable ready button for next room
     const readyBtn = document.getElementById('ready-btn');
@@ -951,6 +1117,17 @@ function leaveRoom() {
 
 function startMultiplayerGame(boardSeed) {
     state.mode = 'multiplayer';
+
+    // BUG #232 FIX: Russian Roulette should always use medium difficulty (16x16, 40 mines)
+    if (state.gameMode === 'luck') {
+        state.difficulty = {
+            name: 'Medium',
+            rows: 16,
+            cols: 16,
+            mines: 40
+        };
+    }
+
     showScreen('game-screen');
     document.getElementById('username-display').textContent = state.displayUsername;
     document.getElementById('room-display').textContent = `Room: ${state.roomCode}`;
@@ -959,8 +1136,8 @@ function startMultiplayerGame(boardSeed) {
     let modeTitle = 'Multiplayer';
     if (state.gameMode === 'luck') modeTitle = 'Russian Roulette';
     else if (state.gameMode === 'timebomb') modeTitle = `Time Bomb - ${state.timebombDifficulty.toUpperCase()}`;
-    else if (state.gameMode === 'survival') modeTitle = 'Survival';
-    else if (state.gameMode === 'standard') modeTitle = 'Standard Race';
+    else if (state.gameMode === 'survival') modeTitle = `Survival - ${state.difficulty.name}`;
+    else if (state.gameMode === 'standard') modeTitle = `Standard - ${state.difficulty.name}`;
     document.getElementById('leaderboard-title').textContent = modeTitle;
 
     // BUG #68, #70, #74 FIXES: Validate board seed and handle edge cases
@@ -1042,8 +1219,11 @@ function initCanvas() {
     const cellSizeByWidth = Math.floor(maxWidth / cols);
     const cellSizeByHeight = Math.floor(maxHeight / rows);
 
-    // Use the smaller dimension to ensure it fits, with min 15px and max 40px
-    state.cellSize = Math.max(15, Math.min(cellSizeByWidth, cellSizeByHeight, 40));
+    // BUG #238 FIX: Use the smaller dimension to ensure it fits screen
+    // Don't enforce minimum cell size if it would overflow screen
+    // Allow 10px minimum for very large boards on small screens, max 40px
+    const calculatedSize = Math.min(cellSizeByWidth, cellSizeByHeight, 40);
+    state.cellSize = Math.max(10, calculatedSize);
 
     const width = Math.max(100, cols * state.cellSize); // Min 100px
     const height = Math.max(100, rows * state.cellSize);
@@ -1065,7 +1245,7 @@ function handleNewGame() {
         state.survivalTotalTiles = 0;
         state.survivalMineCount = state.survivalBaseMines;
         state.difficulty.mines = state.survivalBaseMines;
-        document.getElementById('leaderboard-title').textContent = 'Survival - Level 1';
+        document.getElementById('leaderboard-title').textContent = `Survival - ${state.difficulty.name} - Level 1`;
     }
 
     resetGame();
@@ -1099,6 +1279,11 @@ function resetGame() {
     if (state.survivalLevelTimeout) {
         clearTimeout(state.survivalLevelTimeout);
         state.survivalLevelTimeout = null;
+    }
+    // BUG #237 FIX: Clear game result timeout
+    if (state.gameResultTimeout) {
+        clearTimeout(state.gameResultTimeout);
+        state.gameResultTimeout = null;
     }
 
     // Initialize Time Bomb mode countdown
@@ -1277,10 +1462,17 @@ function revealCell(row, col, isUserClick = true) {
         } else {
             // Solo mode - show result immediately
             drawBoard();
+            // BUG #237 FIX: Store timeout so it can be cancelled
             if (state.gameMode === 'survival') {
-                setTimeout(() => showGameResult(false, state.score, `Died on Level ${state.survivalLevel}`), 500);
+                state.gameResultTimeout = setTimeout(() => {
+                    state.gameResultTimeout = null;
+                    showGameResult(false, state.score, `Died on Level ${state.survivalLevel}`);
+                }, 500);
             } else {
-                setTimeout(() => showGameResult(false, state.score), 500);
+                state.gameResultTimeout = setTimeout(() => {
+                    state.gameResultTimeout = null;
+                    showGameResult(false, state.score);
+                }, 500);
             }
         }
 
@@ -1395,7 +1587,11 @@ function checkWin() {
             time: state.elapsedTime
         });
     } else {
-        setTimeout(() => showGameResult(true, state.score), 500);
+        // BUG #237 FIX: Store timeout so it can be cancelled
+        state.gameResultTimeout = setTimeout(() => {
+            state.gameResultTimeout = null;
+            showGameResult(true, state.score);
+        }, 500);
     }
 }
 
@@ -1425,7 +1621,7 @@ function advanceSurvivalLevel() {
     state.difficulty.mines = state.survivalMineCount;
 
     // Update title
-    document.getElementById('leaderboard-title').textContent = `Survival - Level ${state.survivalLevel}`;
+    document.getElementById('leaderboard-title').textContent = `Survival - ${state.difficulty.name} - Level ${state.survivalLevel}`;
 
     // Show level up message briefly
     const indicator = document.getElementById('turn-indicator');
@@ -1696,7 +1892,11 @@ function updateTimeBombTimer() {
         revealAllMines();
         calculateScore();
         drawBoard();
-        setTimeout(() => showGameResult(false, state.score, 'Time\'s Up!'), 500);
+        // BUG #237 FIX: Store timeout so it can be cancelled
+        state.gameResultTimeout = setTimeout(() => {
+            state.gameResultTimeout = null;
+            showGameResult(false, state.score, 'Time\'s Up!');
+        }, 500);
     }
 }
 
@@ -1884,6 +2084,11 @@ function quitGame() {
     if (state.survivalLevelTimeout) {
         clearTimeout(state.survivalLevelTimeout);
         state.survivalLevelTimeout = null;
+    }
+    // BUG #237 FIX: Clear game result timeout
+    if (state.gameResultTimeout) {
+        clearTimeout(state.gameResultTimeout);
+        state.gameResultTimeout = null;
     }
 
     // Reset game state

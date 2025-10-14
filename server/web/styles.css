@@ -228,6 +228,19 @@ input[type="text"]:focus {
     text-shadow: 0 0 10px rgba(155, 89, 182, 0.5);
 }
 
+/* Color-coded board difficulty levels for Standard/Survival */
+.mode-card[data-board-difficulty="easy"] h2 {
+    color: #2ecc71;
+}
+
+.mode-card[data-board-difficulty="medium"] h2 {
+    color: #f1c40f;
+}
+
+.mode-card[data-board-difficulty="hard"] h2 {
+    color: #e67e22;
+}
+
 /* Room Info */
 .room-info {
     background: rgba(102, 126, 234, 0.3);
@@ -828,6 +841,11 @@ input[type="text"]:focus {
    ============================================================================ */
 
 @media (max-width: 600px) {
+    /* BUG #239 FIX: Scale down large headings on mobile */
+    h1 {
+        font-size: 1.8em;
+    }
+
     .auth-form h2 {
         font-size: 1.5em;
     }
@@ -842,5 +860,48 @@ input[type="text"]:focus {
 
     .main-menu .btn {
         width: 100%;
+    }
+
+    /* BUG #240 FIX: Mobile responsive game UI */
+    .mode-card h2 {
+        font-size: 1.5em;
+    }
+
+    .mode-card p {
+        font-size: 0.9em;
+    }
+
+    .game-header {
+        gap: 10px;
+    }
+
+    .game-info, .game-stats {
+        gap: 10px;
+        font-size: 0.85em;
+    }
+
+    .turn-indicator {
+        font-size: 1em;
+    }
+
+    .game-container {
+        padding: 15px;
+    }
+
+    .result-content {
+        padding: 30px 20px;
+        max-width: 90%;
+    }
+
+    #result-text {
+        font-size: 2em;
+    }
+
+    #result-emoji {
+        font-size: 3em;
+    }
+
+    #result-score {
+        font-size: 1.2em;
     }
 }

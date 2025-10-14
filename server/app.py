@@ -409,8 +409,8 @@ def refresh_token():
         return jsonify({'success': False, 'message': 'User not found or inactive'}), 401
 
     try:
-        # Generate new access token
-        access_token = generate_access_token(user.id, user.username, user.is_verified)
+        # BUG #234 FIX: generate_access_token only takes 2 parameters, not 3
+        access_token = generate_access_token(user.id, user.username)
 
         # Optionally rotate refresh token for better security
         new_refresh_token = secrets.token_urlsafe(32)
@@ -607,6 +607,11 @@ def handle_create_room(data):
         emit('error', {"message": "Invalid data"})
         return
 
+    # BUG #235 FIX: Enforce MAX_ROOMS limit to prevent memory exhaustion
+    if len(game_rooms) >= MAX_ROOMS:
+        emit('error', {"message": "Server at capacity. Please try again later."})
+        return
+
     # Sanitize and validate inputs
     username = sanitize_input(data.get("username", "Player"), 50)
     difficulty = sanitize_input(data.get("difficulty", "Medium"), 20)
@@ -671,13 +676,27 @@ def handle_join_room(data):
         emit('error', {"message": "Invalid data"})
         return
 
+    # BUG #235 FIX: Enforce MAX_SESSIONS limit to prevent memory exhaustion
+    if len(player_sessions) >= MAX_SESSIONS:
+        emit('error', {"message": "Server at capacity. Please try again later."})
+        return
+
     # Validate and sanitize room code
     room_code = str(data.get("room_code", "")).strip()
-    # BUG #94 FIX: Strip leading zeros for consistency
-    room_code = room_code.lstrip('0') or '0'
-    room_code = room_code.zfill(6)  # Pad back to 6 digits
 
-    if not room_code or len(room_code) != 6 or not room_code.isdigit():
+    # BUG #236 FIX: Normalize room code properly by converting to int first
+    # This avoids issues with "000000" being treated differently than "0"
+    try:
+        room_code_int = int(room_code)
+        if room_code_int < 0 or room_code_int > 999999:
+            emit('error', {"message": "Invalid room code - must be between 000000 and 999999"})
+            return
+        room_code = str(room_code_int).zfill(6)
+    except (ValueError, TypeError):
+        emit('error', {"message": "Invalid room code format - must be 6 digits"})
+        return
+
+    if not room_code or len(room_code) != 6:
         emit('error', {"message": "Invalid room code format - must be 6 digits"})
         return
 
