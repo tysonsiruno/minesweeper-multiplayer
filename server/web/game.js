@@ -365,25 +365,37 @@ function connectToServer() {
 
     state.socket.on('connect', () => {
         console.log('Connected to server');
-        document.getElementById('connection-status').textContent = '✅ Connected to server';
-        document.getElementById('create-room-btn').disabled = false;
-        document.getElementById('join-room-btn').disabled = false;
+        const statusEl = document.getElementById('connection-status');
+        if (statusEl) statusEl.textContent = '✅ Connected to server';
+        const createBtn = document.getElementById('create-room-btn');
+        if (createBtn) createBtn.disabled = false;
+        const joinBtn = document.getElementById('join-room-btn');
+        if (joinBtn) joinBtn.disabled = false;
     });
 
     state.socket.on('disconnect', () => {
         console.log('Disconnected from server');
-        document.getElementById('connection-status').textContent = '❌ Disconnected from server';
+        const statusEl = document.getElementById('connection-status');
+        if (statusEl) statusEl.textContent = '❌ Disconnected from server';
     });
 
     state.socket.on('room_created', (data) => {
+        if (!data || !data.room_code) {
+            console.error('Invalid room_created data:', data);
+            return;
+        }
         state.roomCode = data.room_code;
-        state.gameMode = data.game_mode;
+        state.gameMode = data.game_mode || 'standard';
         showWaitingRoom();
     });
 
     state.socket.on('room_joined', (data) => {
+        if (!data || !data.room_code) {
+            console.error('Invalid room_joined data:', data);
+            return;
+        }
         state.roomCode = data.room_code;
-        state.players = data.players;
+        state.players = data.players || [];
         showWaitingRoom();
     });
 
@@ -412,11 +424,20 @@ function connectToServer() {
     });
 
     state.socket.on('player_action', (data) => {
+        if (!data || !data.action) {
+            console.error('Invalid player_action data:', data);
+            return;
+        }
+
         // Handle other players' actions
         console.log(`Player ${data.username} performed action: ${data.action} at (${data.row}, ${data.col})`);
 
-        // Show opponent's move in real-time
+        // Validate row/col bounds before accessing board
         if (data.action === 'reveal' && data.row !== undefined && data.col !== undefined) {
+            if (data.row < 0 || data.row >= state.difficulty.rows || data.col < 0 || data.col >= state.difficulty.cols) {
+                console.error('player_action out of bounds:', data);
+                return;
+            }
             const cell = state.board[data.row][data.col];
             if (cell && !cell.isRevealed) {
                 cell.isRevealed = true;
@@ -424,6 +445,10 @@ function connectToServer() {
                 drawBoard();
             }
         } else if (data.action === 'flag' && data.row !== undefined && data.col !== undefined) {
+            if (data.row < 0 || data.row >= state.difficulty.rows || data.col < 0 || data.col >= state.difficulty.cols) {
+                console.error('player_action out of bounds:', data);
+                return;
+            }
             const cell = state.board[data.row][data.col];
             if (cell && !cell.isRevealed) {
                 cell.isFlagged = !cell.isFlagged;
@@ -440,14 +465,22 @@ function connectToServer() {
     });
 
     state.socket.on('player_finished', (data) => {
+        if (!data || !data.players) {
+            console.error('Invalid player_finished data:', data);
+            return;
+        }
         state.players = data.players;
         updateLeaderboard();
     });
 
     state.socket.on('game_ended', (data) => {
+        if (!data || !data.results || !Array.isArray(data.results) || data.results.length === 0) {
+            console.error('Invalid game_ended data:', data);
+            return;
+        }
         const results = data.results;
         const myResult = results.find(p => p.username === state.displayUsername);
-        const won = results[0].username === state.displayUsername;
+        const won = results[0] && results[0].username === state.displayUsername;
         showGameResult(won, myResult ? myResult.score : 0);
     });
 
@@ -461,15 +494,18 @@ function connectToServer() {
     });
 
     state.socket.on('error', (data) => {
-        console.log('Server error:', data.message);
+        const message = data && data.message ? data.message : 'Unknown error occurred';
+        console.log('Server error:', message);
 
         // If on join screen, show error there
         if (state.currentScreen === 'join-screen') {
             const errorEl = document.getElementById('join-error');
-            errorEl.textContent = data.message;
-            errorEl.style.color = '#ff6b6b'; // Red error color
+            if (errorEl) {
+                errorEl.textContent = message;
+                errorEl.style.color = '#ff6b6b'; // Red error color
+            }
         } else {
-            alert('Error: ' + data.message);
+            alert('Error: ' + message);
         }
     });
 }
