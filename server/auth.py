@@ -187,14 +187,13 @@ def sanitize_input(text: str, max_length: int = 500) -> str:
 # JWT TOKEN GENERATION
 # ============================================================================
 
-def generate_access_token(user_id: int, username: str, is_verified: bool = False) -> str:
+def generate_access_token(user_id: int, username: str) -> str:
     """
     Generate a JWT access token
 
     Args:
         user_id: User ID
         username: Username
-        is_verified: Whether user's email is verified
 
     Returns:
         JWT token string
@@ -206,7 +205,6 @@ def generate_access_token(user_id: int, username: str, is_verified: bool = False
     payload = {
         'user_id': user_id,
         'username': username,
-        'is_verified': is_verified,
         'iat': now,
         'exp': now + ACCESS_TOKEN_EXPIRES,
         'type': 'access'
@@ -345,21 +343,22 @@ def token_required(f):
     return decorated
 
 
-def verified_required(f):
+def admin_required(f):
     """
-    Decorator to require verified email
+    Decorator to require admin privileges (placeholder for future use)
 
     Usage:
-        @app.route('/verified-only')
+        @app.route('/admin-only')
         @token_required
-        @verified_required
-        def verified_route(current_user):
-            return jsonify({'message': 'Email is verified!'})
+        @admin_required
+        def admin_route(current_user):
+            return jsonify({'message': 'Admin access!'})
     """
     @wraps(f)
     def decorated(current_user, *args, **kwargs):
-        if not current_user.is_verified:
-            return jsonify({'success': False, 'message': 'Email verification required'}), 403
+        # Placeholder for admin check in future
+        # if not current_user.is_admin:
+        #     return jsonify({'success': False, 'message': 'Admin privileges required'}), 403
 
         return f(current_user, *args, **kwargs)
 

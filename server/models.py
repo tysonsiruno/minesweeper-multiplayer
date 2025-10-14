@@ -17,7 +17,6 @@ class User(db.Model):
     username = db.Column(db.String(50), unique=True, nullable=False, index=True)
     email = db.Column(db.String(255), unique=True, nullable=False, index=True)
     password_hash = db.Column(db.String(255), nullable=False)
-    is_verified = db.Column(db.Boolean, default=True)  # Auto-verify (no email setup)
     is_guest = db.Column(db.Boolean, default=False)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
@@ -34,7 +33,6 @@ class User(db.Model):
     # Relationships
     sessions = db.relationship('Session', backref='user', lazy=True, cascade='all, delete-orphan')
     game_history = db.relationship('GameHistory', backref='user', lazy=True)
-    email_tokens = db.relationship('EmailVerificationToken', backref='user', lazy=True, cascade='all, delete-orphan')
     password_tokens = db.relationship('PasswordResetToken', backref='user', lazy=True, cascade='all, delete-orphan')
 
     def __repr__(self):
@@ -50,7 +48,6 @@ class User(db.Model):
             'id': self.id,
             'username': self.username,
             'email': self.email,
-            'is_verified': self.is_verified,
             'created_at': self.created_at.isoformat() if self.created_at else None,
             'total_games_played': total_games,
             'total_wins': total_wins,
@@ -58,36 +55,6 @@ class User(db.Model):
             'highest_score': self.highest_score if self.highest_score is not None else 0,
             'win_rate': round((total_wins / total_games * 100) if total_games > 0 else 0, 1)
         }
-
-
-class EmailVerificationToken(db.Model):
-    """Email verification tokens"""
-    __tablename__ = 'email_verification_tokens'
-
-    id = db.Column(db.Integer, primary_key=True)
-    user_id = db.Column(db.Integer, db.ForeignKey('users.id', ondelete='CASCADE'), nullable=False)
-    token = db.Column(db.String(255), unique=True, nullable=False, index=True)
-    expires_at = db.Column(db.DateTime, nullable=False)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
-    used_at = db.Column(db.DateTime)
-
-    @staticmethod
-    def generate_token():
-        """Generate a secure random token"""
-        return secrets.token_urlsafe(32)
-
-    def is_expired(self):
-        """Check if token is expired"""
-        # BUG #129, #130 FIX: Handle None expires_at and use consistent timezone
-        if self.expires_at is None:
-            return True
-        from datetime import timezone
-        now = datetime.now(timezone.utc) if self.expires_at.tzinfo else datetime.utcnow()
-        return now > self.expires_at
-
-    def is_used(self):
-        """Check if token has been used"""
-        return self.used_at is not None
 
 
 class PasswordResetToken(db.Model):

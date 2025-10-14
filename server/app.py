@@ -59,7 +59,7 @@ limiter = Limiter(
 )
 
 # Initialize database
-from models import db, User, Session, GameHistory, EmailVerificationToken, PasswordResetToken, SecurityAuditLog
+from models import db, User, Session, GameHistory, PasswordResetToken, SecurityAuditLog
 
 db.init_app(app)
 
@@ -158,13 +158,12 @@ def register():
     if User.query.filter_by(email=email).first():
         return jsonify({'success': False, 'message': 'Email already registered'}), 400
 
-    # Create user (auto-verified - no email setup)
+    # Create user
     try:
         user = User(
             username=username,
             email=email,
-            password_hash=hash_password(password),
-            is_verified=True  # Auto-verify since no email service configured
+            password_hash=hash_password(password)
         )
         db.session.add(user)
         db.session.commit()
@@ -220,15 +219,10 @@ def login():
     try:
         user.failed_login_attempts = 0
         user.last_login = datetime.utcnow()
-
-        # Auto-verify existing users (migration fix for disabled email verification)
-        if not user.is_verified:
-            user.is_verified = True
-
         db.session.commit()
 
         # Generate tokens
-        access_token = generate_access_token(user.id, user.username, user.is_verified)
+        access_token = generate_access_token(user.id, user.username)
         refresh_token_str = secrets.token_urlsafe(32)
 
         session = Session(

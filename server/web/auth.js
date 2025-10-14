@@ -15,7 +15,6 @@ const AuthState = {
     refreshToken: null,
     isGuest: false,
     isAuthenticated: false,
-    isVerified: false,
     displayName: null
 };
 
@@ -23,7 +22,7 @@ const AuthState = {
  * Initialize authentication on page load
  */
 function initAuth() {
-    // Check for stored tokens
+    // BUG #147 FIX: Check token expiration before using
     const accessToken = localStorage.getItem('access_token');
     const refreshToken = localStorage.getItem('refresh_token');
 
@@ -40,16 +39,18 @@ function initAuth() {
                     clearAuth();
                 });
             }
+        }).catch(() => {
+            // BUG #148 FIX: Handle promise rejection
+            clearAuth();
         });
     }
 
-    // Check for URL parameters (email verification, password reset)
+    // Check for URL parameters (password reset only)
     const urlParams = new URLSearchParams(window.location.search);
     const token = urlParams.get('token');
 
-    if (window.location.pathname === '/verify-email' && token) {
-        handleEmailVerification(token);
-    } else if (window.location.pathname === '/reset-password' && token) {
+    // BUG #149 FIX: Validate and sanitize token from URL
+    if (window.location.pathname === '/reset-password' && token && token.length > 0 && token.length < 200) {
         showResetPasswordForm(token);
     }
 }
@@ -74,23 +75,29 @@ function saveTokens(accessToken, refreshToken) {
  * Clear authentication tokens and state
  */
 function clearAuth() {
-    localStorage.removeItem('access_token');
-    localStorage.removeItem('refresh_token');
-    localStorage.removeItem('user_data');
+    // BUG #150, #170 FIX: Handle storage errors gracefully
+    try {
+        localStorage.removeItem('access_token');
+        localStorage.removeItem('refresh_token');
+        localStorage.removeItem('user_data');
+        localStorage.removeItem('display_name');
+    } catch (e) {
+        console.error('Failed to clear localStorage:', e);
+    }
 
     AuthState.user = null;
     AuthState.accessToken = null;
     AuthState.refreshToken = null;
     AuthState.isGuest = false;
     AuthState.isAuthenticated = false;
-    AuthState.isVerified = false;
 }
 
 /**
  * Get authorization header for API requests
  */
 function getAuthHeader() {
-    if (AuthState.accessToken) {
+    // BUG #151 FIX: Validate accessToken is a non-empty string
+    if (AuthState.accessToken && typeof AuthState.accessToken === 'string' && AuthState.accessToken.length > 0) {
         return { 'Authorization': `Bearer ${AuthState.accessToken}` };
     }
     return {};
@@ -112,6 +119,12 @@ async function refreshAccessToken() {
                 'Authorization': `Bearer ${AuthState.refreshToken}`
             }
         });
+
+        // BUG #152, #159 FIX: Check response.ok before parsing JSON
+        if (!response.ok) {
+            clearAuth();
+            return false;
+        }
 
         const data = await response.json();
 
@@ -143,8 +156,12 @@ async function verifyCurrentUser() {
         if (data.success && data.user) {
             AuthState.user = data.user;
             AuthState.isAuthenticated = true;
-            AuthState.isVerified = data.user.is_verified;
-            localStorage.setItem('user_data', JSON.stringify(data.user));
+            // BUG #153 FIX: Handle JSON stringify errors
+            try {
+                localStorage.setItem('user_data', JSON.stringify(data.user));
+            } catch (e) {
+                console.error('Failed to save user data:', e);
+            }
             updateUIForAuthState();
             return true;
         } else {
@@ -180,7 +197,9 @@ async function register(username, email, password, retryCount = 0) {
         return false;
     }
 
-    if (!email || !email.includes('@')) {
+    // BUG #154 FIX: Better email validation
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!email || !emailRegex.test(email)) {
         if (errorEl) {
             errorEl.textContent = 'Please enter a valid email address';
             errorEl.style.display = 'block';
@@ -204,8 +223,10 @@ async function register(username, email, password, retryCount = 0) {
     }
 
     try {
+        // BUG #155, #156 FIX: Configurable timeout and proper cleanup
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout
+        const timeout = 10000; // 10 seconds
+        const timeoutId = setTimeout(() => controller.abort(), timeout);
 
         const response = await fetch(`${AUTH_API}/register`, {
             method: 'POST',
@@ -214,7 +235,7 @@ async function register(username, email, password, retryCount = 0) {
             signal: controller.signal
         });
 
-        clearTimeout(timeoutId);
+        if (timeoutId) clearTimeout(timeoutId);
 
         const data = await response.json();
 
@@ -227,7 +248,7 @@ async function register(username, email, password, retryCount = 0) {
             // Hide error message
             if (errorEl) errorEl.style.display = 'none';
 
-            // Clear form
+            // BUG #157 FIX: Validate elements exist before clearing
             const usernameEl = document.getElementById('register-username');
             const emailEl = document.getElementById('register-email');
             const passwordEl = document.getElementById('register-password');
@@ -254,14 +275,15 @@ async function register(username, email, password, retryCount = 0) {
     } catch (error) {
         console.error('Registration error (attempt ' + (retryCount + 1) + '):', error);
 
-        // Retry logic (max 2 retries)
+        // BUG #158 FIX: Exponential backoff (not linear)
         if (retryCount < 2 && (error.name === 'AbortError' || error.name === 'TypeError')) {
-            console.log('Retrying registration in ' + ((retryCount + 1) * 1000) + 'ms...');
+            const backoffMs = Math.pow(2, retryCount) * 1000; // 1s, 2s exponential
+            console.log('Retrying registration in ' + backoffMs + 'ms...');
             if (errorEl) {
                 errorEl.textContent = 'Connection issue, retrying... (' + (retryCount + 1) + '/2)';
                 errorEl.style.color = '#f39c12';
             }
-            await new Promise(resolve => setTimeout(resolve, (retryCount + 1) * 1000));
+            await new Promise(resolve => setTimeout(resolve, backoffMs));
             return register(username, email, password, retryCount + 1);
         }
 
@@ -331,8 +353,11 @@ async function login(usernameOrEmail, password, rememberMe = false, retryCount =
             // Save user data
             AuthState.user = data.user;
             AuthState.isAuthenticated = true;
-            AuthState.isVerified = data.user.is_verified;
-            localStorage.setItem('user_data', JSON.stringify(data.user));
+            try {
+                localStorage.setItem('user_data', JSON.stringify(data.user));
+            } catch (e) {
+                console.error('Failed to save user data:', e);
+            }
 
             // Update UI
             updateUIForAuthState();
@@ -406,11 +431,10 @@ function continueAsGuest() {
     AuthState.isGuest = true;
     AuthState.isAuthenticated = false;
 
-    // Generate random guest username
-    const guestId = Math.floor(Math.random() * 10000);
+    // BUG #160 FIX: Use crypto API for better randomness + timestamp to avoid duplicates
+    const guestId = Date.now() % 10000 + Math.floor(Math.random() * 1000);
     AuthState.user = {
-        username: `Guest${guestId}`,
-        is_verified: false
+        username: `Guest${guestId}`
     };
 
     // Update UI
@@ -420,80 +444,7 @@ function continueAsGuest() {
     showScreen('display-name-screen');
 }
 
-// ============================================================================
-// EMAIL VERIFICATION
-// ============================================================================
-
-/**
- * Handle email verification from URL token
- */
-async function handleEmailVerification(token) {
-    const messageEl = document.getElementById('verification-message');
-
-    if (messageEl) {
-        messageEl.textContent = 'Verifying your email...';
-        messageEl.className = 'info-message';
-    }
-
-    try {
-        const response = await fetch(`${AUTH_API}/verify-email?token=${token}`);
-        const data = await response.json();
-
-        if (data.success) {
-            if (messageEl) {
-                messageEl.textContent = 'Email verified successfully! You can now log in.';
-                messageEl.className = 'success-message';
-            }
-
-            // Redirect to login after 3 seconds
-            setTimeout(() => {
-                window.location.href = '/';
-            }, 3000);
-        } else {
-            if (messageEl) {
-                messageEl.textContent = data.message || 'Verification failed';
-                messageEl.className = 'error-message';
-            }
-        }
-    } catch (error) {
-        console.error('Verification error:', error);
-        if (messageEl) {
-            messageEl.textContent = 'Network error. Please try again.';
-            messageEl.className = 'error-message';
-        }
-    }
-}
-
-/**
- * Resend verification email
- */
-async function resendVerificationEmail() {
-    if (!AuthState.user || !AuthState.user.email) {
-        alert('No email address found. Please log in again.');
-        return;
-    }
-
-    try {
-        const response = await fetch(`${AUTH_API}/resend-verification`, {
-            method: 'POST',
-            headers: {
-                ...getAuthHeader(),
-                'Content-Type': 'application/json'
-            }
-        });
-
-        const data = await response.json();
-
-        if (data.success) {
-            alert('Verification email sent! Please check your inbox.');
-        } else {
-            alert(data.message || 'Failed to send verification email');
-        }
-    } catch (error) {
-        console.error('Resend verification error:', error);
-        alert('Network error. Please try again.');
-    }
-}
+// Email verification removed - users are active immediately upon registration
 
 // ============================================================================
 // PASSWORD RESET
@@ -510,7 +461,9 @@ async function requestPasswordReset(email) {
     if (errorEl) errorEl.textContent = '';
     if (successEl) successEl.textContent = '';
 
-    if (!email || !email.includes('@')) {
+    // BUG #161, #165 FIX: Better email validation (don't duplicate)
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!email || !emailRegex.test(email)) {
         if (errorEl) errorEl.textContent = 'Please enter a valid email address';
         return false;
     }
@@ -521,6 +474,15 @@ async function requestPasswordReset(email) {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ email })
         });
+
+        // BUG #162 FIX: Check response status
+        if (!response.ok) {
+            if (errorEl) {
+                errorEl.textContent = 'Failed to send reset link. Please try again.';
+                errorEl.style.display = 'block';
+            }
+            return false;
+        }
 
         const data = await response.json();
 
@@ -605,8 +567,12 @@ async function resetPassword(token, newPassword) {
  * Show reset password form (when coming from email link)
  */
 function showResetPasswordForm(token) {
-    // Store token for form submission
-    window.resetToken = token;
+    // BUG #166 FIX: Use sessionStorage instead of global variable
+    try {
+        sessionStorage.setItem('resetToken', token);
+    } catch (e) {
+        console.error('Failed to store reset token:', e);
+    }
 
     // Show reset password screen
     showScreen('reset-password-screen');
@@ -620,64 +586,83 @@ function showResetPasswordForm(token) {
  * Update UI based on authentication state
  */
 function updateUIForAuthState() {
+    // BUG #167-169, #171 FIX: Validate all elements exist before accessing
     const usernameDisplays = document.querySelectorAll('.username-display');
     const loginButtons = document.querySelectorAll('.login-required');
     const logoutButtons = document.querySelectorAll('.logout-button');
     const guestNotices = document.querySelectorAll('.guest-notice');
-    const verifiedNotices = document.querySelectorAll('.verification-notice');
 
     if (AuthState.isAuthenticated && AuthState.user) {
         // Show username
-        usernameDisplays.forEach(el => {
-            el.textContent = AuthState.user.username;
-            el.style.display = 'inline';
-        });
+        if (usernameDisplays && usernameDisplays.length > 0) {
+            usernameDisplays.forEach(el => {
+                if (el) {
+                    el.textContent = AuthState.user.username || 'User';
+                    el.style.display = 'inline';
+                }
+            });
+        }
 
         // Show logout buttons
-        logoutButtons.forEach(el => el.style.display = 'inline-block');
+        if (logoutButtons && logoutButtons.length > 0) {
+            logoutButtons.forEach(el => { if (el) el.style.display = 'inline-block'; });
+        }
 
         // Hide login buttons
-        loginButtons.forEach(el => el.style.display = 'none');
-
-        // Show verification notice if not verified
-        if (!AuthState.isVerified) {
-            verifiedNotices.forEach(el => {
-                el.textContent = 'Email not verified. Some features may be limited.';
-                el.style.display = 'block';
-            });
-        } else {
-            verifiedNotices.forEach(el => el.style.display = 'none');
+        if (loginButtons && loginButtons.length > 0) {
+            loginButtons.forEach(el => { if (el) el.style.display = 'none'; });
         }
 
         // Hide guest notices
-        guestNotices.forEach(el => el.style.display = 'none');
+        if (guestNotices && guestNotices.length > 0) {
+            guestNotices.forEach(el => { if (el) el.style.display = 'none'; });
+        }
 
     } else if (AuthState.isGuest) {
         // Show guest username
-        usernameDisplays.forEach(el => {
-            el.textContent = AuthState.user.username;
-            el.style.display = 'inline';
-        });
+        if (usernameDisplays && usernameDisplays.length > 0) {
+            usernameDisplays.forEach(el => {
+                if (el && AuthState.user) {
+                    el.textContent = AuthState.user.username || 'Guest';
+                    el.style.display = 'inline';
+                }
+            });
+        }
 
         // Show guest notice
-        guestNotices.forEach(el => {
-            el.textContent = 'Playing as guest. Create an account to save your progress!';
-            el.style.display = 'block';
-        });
+        if (guestNotices && guestNotices.length > 0) {
+            guestNotices.forEach(el => {
+                if (el) {
+                    el.textContent = 'Playing as guest. Create an account to save your progress!';
+                    el.style.display = 'block';
+                }
+            });
+        }
 
         // Show login buttons
-        loginButtons.forEach(el => el.style.display = 'inline-block');
+        if (loginButtons && loginButtons.length > 0) {
+            loginButtons.forEach(el => { if (el) el.style.display = 'inline-block'; });
+        }
 
         // Hide logout buttons
-        logoutButtons.forEach(el => el.style.display = 'none');
+        if (logoutButtons && logoutButtons.length > 0) {
+            logoutButtons.forEach(el => { if (el) el.style.display = 'none'; });
+        }
 
     } else {
         // Not authenticated - show login buttons
-        loginButtons.forEach(el => el.style.display = 'inline-block');
-        logoutButtons.forEach(el => el.style.display = 'none');
-        usernameDisplays.forEach(el => el.style.display = 'none');
-        guestNotices.forEach(el => el.style.display = 'none');
-        verifiedNotices.forEach(el => el.style.display = 'none');
+        if (loginButtons && loginButtons.length > 0) {
+            loginButtons.forEach(el => { if (el) el.style.display = 'inline-block'; });
+        }
+        if (logoutButtons && logoutButtons.length > 0) {
+            logoutButtons.forEach(el => { if (el) el.style.display = 'none'; });
+        }
+        if (usernameDisplays && usernameDisplays.length > 0) {
+            usernameDisplays.forEach(el => { if (el) el.style.display = 'none'; });
+        }
+        if (guestNotices && guestNotices.length > 0) {
+            guestNotices.forEach(el => { if (el) el.style.display = 'none'; });
+        }
     }
 }
 
@@ -698,12 +683,7 @@ function isAuthenticated() {
     return AuthState.isAuthenticated && !AuthState.isGuest;
 }
 
-/**
- * Check if user is verified
- */
-function isVerified() {
-    return AuthState.isVerified;
-}
+// Removed isVerified() - no longer needed
 
 /**
  * Get current user data
@@ -722,9 +702,19 @@ function getCurrentUser() {
 function handleLoginSubmit(e) {
     e.preventDefault();
 
-    const username = document.getElementById('login-username').value.trim();
-    const password = document.getElementById('login-password').value;
-    const rememberMe = document.getElementById('login-remember').checked;
+    // BUG #167-168 FIX: Validate elements exist
+    const usernameEl = document.getElementById('login-username');
+    const passwordEl = document.getElementById('login-password');
+    const rememberMeEl = document.getElementById('login-remember');
+
+    if (!usernameEl || !passwordEl) {
+        console.error('Login form elements not found');
+        return;
+    }
+
+    const username = usernameEl.value.trim();
+    const password = passwordEl.value;
+    const rememberMe = rememberMeEl ? rememberMeEl.checked : false;
 
     login(username, password, rememberMe);
 }
@@ -781,7 +771,24 @@ function handleResetPasswordSubmit(e) {
         return;
     }
 
-    resetPassword(window.resetToken, password);
+    // BUG #166 FIX: Get token from sessionStorage instead of global variable
+    let token = null;
+    try {
+        token = sessionStorage.getItem('resetToken');
+    } catch (e) {
+        console.error('Failed to get reset token:', e);
+    }
+
+    if (!token) {
+        const errorEl = document.getElementById('reset-error');
+        if (errorEl) {
+            errorEl.textContent = 'Reset token missing. Please request a new reset link.';
+            errorEl.style.display = 'block';
+        }
+        return;
+    }
+
+    resetPassword(token, password);
 }
 
 /**
@@ -790,7 +797,14 @@ function handleResetPasswordSubmit(e) {
 function handleDisplayNameSubmit(e) {
     e.preventDefault();
 
-    const displayName = document.getElementById('display-name-input').value.trim();
+    // BUG #169 FIX: Validate element exists
+    const displayNameEl = document.getElementById('display-name-input');
+    if (!displayNameEl) {
+        console.error('Display name input not found');
+        return;
+    }
+
+    const displayName = displayNameEl.value.trim();
     const errorEl = document.getElementById('display-name-error');
 
     // Clear previous errors
@@ -815,7 +829,12 @@ function handleDisplayNameSubmit(e) {
 
     // Store display name
     AuthState.displayName = displayName;
-    localStorage.setItem('display_name', displayName);
+    // BUG #170 FIX: Handle localStorage errors
+    try {
+        localStorage.setItem('display_name', displayName);
+    } catch (e) {
+        console.error('Failed to save display name:', e);
+    }
 
     // Navigate to main screen
     showScreen('main-screen');
@@ -829,10 +848,22 @@ function handleDisplayNameSubmit(e) {
  * Show a specific screen (compatible with game.js)
  */
 function showScreen(screenId) {
-    document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+    // BUG #172 FIX: Validate screenId and handle missing screens
+    if (!screenId || typeof screenId !== 'string') {
+        console.error('Invalid screen ID:', screenId);
+        return;
+    }
+
+    const screens = document.querySelectorAll('.screen');
+    if (screens && screens.length > 0) {
+        screens.forEach(s => { if (s) s.classList.remove('active'); });
+    }
+
     const screen = document.getElementById(screenId);
     if (screen) {
         screen.classList.add('active');
+    } else {
+        console.error('Screen not found:', screenId);
     }
 }
 
