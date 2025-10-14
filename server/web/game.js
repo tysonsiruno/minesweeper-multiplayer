@@ -28,9 +28,11 @@ const state = {
     flagsPlaced: 0,
     hintsRemaining: 3,
     hintCell: null,
+    hintTimeout: null, // BUG #42 FIX: Track hint timeout for cleanup
     hoverCell: null, // Track cell under cursor
     score: 0,
     timerInterval: null,
+    survivalLevelTimeout: null, // BUG #49 FIX: Track survival level timeout
     tilesClicked: 0, // Track tiles clicked for new scoring system
     totalGameClicks: 0, // For multiplayer: total clicks from all players
     soundEnabled: true, // Sound system toggle
@@ -329,10 +331,16 @@ function setupEventListeners() {
     document.getElementById('result-ok-btn').addEventListener('click', () => {
         document.getElementById('result-overlay').classList.remove('active');
 
+        // BUG #35, #80 FIXES: Reset gameStarted and validate players array
+        state.gameStarted = false;
+
         // In multiplayer, host picks next mode, others wait
         if (state.mode === 'multiplayer') {
             // Check if we're the host (first player in the room)
-            const isHost = state.players.length > 0 && state.players[0].username === state.displayUsername;
+            const isHost = state.players && Array.isArray(state.players) &&
+                           state.players.length > 0 &&
+                           state.players[0] &&
+                           state.players[0].username === state.displayUsername;
 
             if (isHost) {
                 // Host goes to mode selection
@@ -408,7 +416,8 @@ function setupEventListeners() {
         e.preventDefault();
         if (!touchStartPos) return;
 
-        const touchDuration = Date.now() - touchStartTime;
+        // BUG #78 FIX: Validate touch duration is positive
+        const touchDuration = Math.max(0, Date.now() - touchStartTime);
         const col = Math.floor(touchStartPos.x / state.cellSize);
         const row = Math.floor(touchStartPos.y / state.cellSize);
 
@@ -494,8 +503,15 @@ function initializeUsername() {
     // Use display name for gameplay
     state.username = displayName;
 
+    // BUG #79 FIX: Validate displayName is not empty
+    if (!displayName || displayName.trim() === '') {
+        console.warn('Empty display name, using fallback');
+        displayName = accountUsername || 'Player';
+        state.username = displayName;
+    }
+
     // ICantLose cheat: Mask the username for display purposes
-    if (displayName.toLowerCase() === 'icantlose') {
+    if (displayName && displayName.toLowerCase() === 'icantlose') {
         // Toxic/cocky usernames
         const toxicNames = [
             'RUEVNTRYNG?', 'EZWIN', 'UshouldPracticeMore', 'uhhhhisthatit?',
@@ -577,9 +593,20 @@ function showMultiplayerLobby() {
 }
 
 function connectToServer() {
-    if (state.socket) return;
+    // BUG #36, #44 FIXES: Prevent duplicate connections and clean up old socket
+    if (state.socket) {
+        if (state.socket.connected) {
+            console.log('Already connected to server');
+            return;
+        }
+        // Disconnect old socket before creating new one
+        state.socket.removeAllListeners(); // Remove all event listeners
+        state.socket.disconnect();
+        state.socket = null;
+    }
 
-    document.getElementById('connection-status').textContent = 'Connecting to server...';
+    const statusEl = document.getElementById('connection-status');
+    if (statusEl) statusEl.textContent = 'Connecting to server...';
 
     state.socket = io(SERVER_URL);
 
@@ -600,11 +627,21 @@ function connectToServer() {
     });
 
     state.socket.on('room_created', (data) => {
+        // BUG #67 FIX: Validate room code format
         if (!data || !data.room_code) {
             console.error('Invalid room_created data:', data);
+            alert('Failed to create room. Please try again.');
             return;
         }
-        state.roomCode = data.room_code;
+
+        const roomCode = String(data.room_code).trim();
+        if (roomCode.length !== 6 || !/^\d{6}$/.test(roomCode)) {
+            console.error('Invalid room code format:', roomCode);
+            alert('Received invalid room code from server.');
+            return;
+        }
+
+        state.roomCode = roomCode;
         state.gameMode = data.game_mode || 'standard';
         showWaitingRoom();
     });
@@ -721,14 +758,24 @@ function connectToServer() {
     });
 
     state.socket.on('game_ended', (data) => {
-        if (!data || !data.results || !Array.isArray(data.results) || data.results.length === 0) {
+        // BUG #66 FIX: Handle empty results gracefully
+        if (!data || !data.results || !Array.isArray(data.results)) {
             console.error('Invalid game_ended data:', data);
+            showGameResult(false, 0);
             return;
         }
+
+        if (data.results.length === 0) {
+            console.warn('Empty results array in game_ended');
+            showGameResult(false, 0);
+            return;
+        }
+
         const results = data.results;
-        const myResult = results.find(p => p.username === state.displayUsername);
+        const myResult = results.find(p => p && p.username === state.displayUsername);
         const won = results[0] && results[0].username === state.displayUsername;
-        showGameResult(won, myResult ? myResult.score : 0);
+        const finalScore = myResult && typeof myResult.score === 'number' ? myResult.score : 0;
+        showGameResult(won, finalScore);
     });
 
     state.socket.on('player_eliminated', (data) => {
@@ -756,15 +803,35 @@ function connectToServer() {
 }
 
 function disconnectSocket() {
+    // BUG #37, #44 FIXES: Clean up event listeners before disconnect
     if (state.socket) {
+        state.socket.removeAllListeners();
         state.socket.disconnect();
         state.socket = null;
     }
+
+    // Reset connection state
+    state.roomCode = null;
+    state.players = [];
+    state.gameStarted = false;
 }
 
 function createRoom(gameMode) {
+    // BUG #67 FIX: Validate socket and inputs
+    if (!state.socket || !state.socket.connected) {
+        console.error('Cannot create room: not connected to server');
+        alert('Connection lost. Please return to lobby and try again.');
+        return;
+    }
+
+    if (!state.displayUsername || state.displayUsername.trim() === '') {
+        console.error('Cannot create room: invalid username');
+        alert('Invalid username. Please refresh and try again.');
+        return;
+    }
+
     state.socket.emit('create_room', {
-        username: state.displayUsername, // Use display name for multiplayer
+        username: state.displayUsername,
         difficulty: 'Medium',
         max_players: 3,
         game_mode: gameMode
@@ -808,10 +875,23 @@ function showWaitingRoom() {
 }
 
 function updatePlayersList() {
+    // BUG #58, #64 FIXES: Validate element and players array
     const listEl = document.getElementById('players-list');
+    if (!listEl) {
+        console.warn('Players list element not found');
+        return;
+    }
+
     listEl.innerHTML = '<h3>Players:</h3>';
 
+    if (!state.players || !Array.isArray(state.players)) {
+        console.warn('Players array invalid');
+        return;
+    }
+
     state.players.forEach(player => {
+        if (!player || !player.username) return; // Skip invalid players
+
         const div = document.createElement('div');
         div.className = 'player-item';
         div.innerHTML = `
@@ -823,19 +903,48 @@ function updatePlayersList() {
 }
 
 function markReady() {
+    // BUG #38, #66 FIXES: Validate socket connection
+    if (!state.socket || !state.socket.connected) {
+        console.error('Cannot mark ready: not connected to server');
+        alert('Connection lost. Please return to lobby and try again.');
+        return;
+    }
+
     state.socket.emit('player_ready', {});
-    document.getElementById('ready-btn').disabled = true;
-    document.getElementById('ready-btn').textContent = 'Waiting for others...';
+    const readyBtn = document.getElementById('ready-btn');
+    if (readyBtn) {
+        readyBtn.disabled = true;
+        readyBtn.textContent = 'Waiting for others...';
+    }
 }
 
 function leaveRoom() {
-    state.socket.emit('leave_room', {});
+    // BUG #33, #38 FIXES: Reset game state when leaving room
+    if (state.socket && state.socket.connected) {
+        state.socket.emit('leave_room', {});
+    }
+
     state.roomCode = null;
     state.players = [];
+    state.gameStarted = false; // Reset game state
+    state.gameOver = false;
+
+    // Clear any active timers
+    if (state.timerInterval) {
+        clearInterval(state.timerInterval);
+        state.timerInterval = null;
+    }
+    if (state.hintTimeout) {
+        clearTimeout(state.hintTimeout);
+        state.hintTimeout = null;
+    }
 
     // Re-enable ready button for next room
-    document.getElementById('ready-btn').disabled = false;
-    document.getElementById('ready-btn').textContent = 'Ready';
+    const readyBtn = document.getElementById('ready-btn');
+    if (readyBtn) {
+        readyBtn.disabled = false;
+        readyBtn.textContent = 'Ready';
+    }
 
     showScreen('lobby-screen');
 }
@@ -854,12 +963,20 @@ function startMultiplayerGame(boardSeed) {
     else if (state.gameMode === 'standard') modeTitle = 'Standard Race';
     document.getElementById('leaderboard-title').textContent = modeTitle;
 
+    // BUG #68, #70, #74 FIXES: Validate board seed and handle edge cases
+    const validSeed = (typeof boardSeed === 'number' && boardSeed > 0) ? boardSeed : Math.floor(Math.random() * 1000000) + 1;
+
     // Seed random for consistent board across players
     state.seededRandom = (() => {
         const m = 2 ** 35 - 31;
         const a = 185852;
-        let s = boardSeed % m;
-        return () => (s = s * a % m) / m;
+        let s = Math.abs(validSeed) % m;
+        if (s === 0) s = 1; // Prevent seed of exactly 0
+        return () => {
+            s = (s * a) % m;
+            const result = s / m;
+            return result === 0 ? 0.0001 : result; // BUG #74 FIX: Never return exact 0
+        };
     })();
 
     resetGame();
@@ -906,21 +1023,31 @@ function updateTurnIndicator() {
 
 // Game Logic
 function initCanvas() {
+    // BUG #71, #72 FIXES: Validate canvas and prevent invalid dimensions
     const canvas = document.getElementById('game-canvas');
+    if (!canvas) {
+        console.error('Canvas element not found');
+        return;
+    }
 
     // Calculate responsive cell size based on screen size
-    const maxWidth = Math.min(window.innerWidth - 40, 600);  // 20px padding each side, max 600px
-    const maxHeight = Math.min(window.innerHeight - 300, 600);  // Leave room for UI, max 600px
+    const maxWidth = Math.max(100, Math.min(window.innerWidth - 40, 600)); // Min 100px
+    const maxHeight = Math.max(100, Math.min(window.innerHeight - 300, 600));
+
+    // Validate difficulty values
+    const rows = Math.max(1, state.difficulty.rows || 16);
+    const cols = Math.max(1, state.difficulty.cols || 16);
 
     // Calculate cell size that fits screen
-    const cellSizeByWidth = Math.floor(maxWidth / state.difficulty.cols);
-    const cellSizeByHeight = Math.floor(maxHeight / state.difficulty.rows);
+    const cellSizeByWidth = Math.floor(maxWidth / cols);
+    const cellSizeByHeight = Math.floor(maxHeight / rows);
 
     // Use the smaller dimension to ensure it fits, with min 15px and max 40px
     state.cellSize = Math.max(15, Math.min(cellSizeByWidth, cellSizeByHeight, 40));
 
-    const width = state.difficulty.cols * state.cellSize;
-    const height = state.difficulty.rows * state.cellSize;
+    const width = Math.max(100, cols * state.cellSize); // Min 100px
+    const height = Math.max(100, rows * state.cellSize);
+
     canvas.width = width;
     canvas.height = height;
 }
@@ -945,9 +1072,10 @@ function handleNewGame() {
 }
 
 function resetGame() {
+    // BUG #32, #41, #42, #49 FIXES: Comprehensive state reset and cleanup
     state.board = [];
     state.firstClick = true;
-    state.minesPlaced = false; // CRITICAL: Reset mine placement flag
+    state.minesPlaced = false;
     state.gameOver = false;
     state.gameWon = false;
     state.startTime = null;
@@ -959,7 +1087,19 @@ function resetGame() {
     state.tilesClicked = 0;
     state.totalGameClicks = 0;
 
-    if (state.timerInterval) clearInterval(state.timerInterval);
+    // Clear ALL timers and timeouts
+    if (state.timerInterval) {
+        clearInterval(state.timerInterval);
+        state.timerInterval = null;
+    }
+    if (state.hintTimeout) {
+        clearTimeout(state.hintTimeout);
+        state.hintTimeout = null;
+    }
+    if (state.survivalLevelTimeout) {
+        clearTimeout(state.survivalLevelTimeout);
+        state.survivalLevelTimeout = null;
+    }
 
     // Initialize Time Bomb mode countdown
     if (state.gameMode === 'timebomb') {
@@ -1175,7 +1315,14 @@ function revealCell(row, col, isUserClick = true) {
 }
 
 function toggleFlag(row, col) {
+    // BUG #55 FIX: Don't allow flagging before mines placed
+    if (!state.minesPlaced || !state.board || state.board.length === 0) {
+        console.warn('Cannot flag: board not ready');
+        return;
+    }
+
     if (row < 0 || row >= state.difficulty.rows || col < 0 || col >= state.difficulty.cols) return;
+    if (!state.board[row] || !state.board[row][col]) return;
 
     const cell = state.board[row][col];
     if (cell.isRevealed) return;
@@ -1199,19 +1346,34 @@ function toggleFlag(row, col) {
 }
 
 function revealAllMines() {
-    for (let row = 0; row < state.difficulty.rows; row++) {
-        for (let col = 0; col < state.difficulty.cols; col++) {
-            if (state.board[row][col].isMine) {
-                state.board[row][col].isRevealed = true;
+    // BUG #52 FIX: Validate board exists before revealing
+    if (!state.board || state.board.length === 0) {
+        console.warn('Cannot reveal mines: board not initialized');
+        return;
+    }
+
+    for (let row = 0; row < state.difficulty.rows && row < state.board.length; row++) {
+        if (!state.board[row]) continue;
+        for (let col = 0; col < state.difficulty.cols && col < state.board[row].length; col++) {
+            const cell = state.board[row][col];
+            if (cell && cell.isMine) {
+                cell.isRevealed = true;
             }
         }
     }
 }
 
 function checkWin() {
-    for (let row = 0; row < state.difficulty.rows; row++) {
-        for (let col = 0; col < state.difficulty.cols; col++) {
+    // BUG #53, #76 FIXES: Validate board and prevent empty board win
+    if (!state.board || state.board.length === 0 || !state.minesPlaced) {
+        return; // Don't check win on uninitialized board
+    }
+
+    for (let row = 0; row < state.difficulty.rows && row < state.board.length; row++) {
+        if (!state.board[row]) return;
+        for (let col = 0; col < state.difficulty.cols && col < state.board[row].length; col++) {
             const cell = state.board[row][col];
+            if (!cell) return;
             if (!cell.isMine && !cell.isRevealed) return;
         }
     }
@@ -1245,10 +1407,18 @@ function advanceSurvivalLevel() {
     state.survivalLevel++;
     state.survivalMineCount = state.survivalBaseMines + (state.survivalLevel - 1) * state.survivalMineIncrease;
 
-    // Cap at reasonable max (board can only fit 256 - safe tiles)
-    const maxMines = (state.difficulty.rows * state.difficulty.cols) - 20; // Keep at least 20 safe tiles
+    // BUG #73 FIX: Strict validation that mines don't exceed capacity
+    const totalCells = state.difficulty.rows * state.difficulty.cols;
+    const maxMines = Math.max(1, totalCells - 20); // Keep at least 20 safe tiles, min 1
+
     if (state.survivalMineCount > maxMines) {
+        console.warn(`Survival mines ${state.survivalMineCount} exceeds max ${maxMines}, capping`);
         state.survivalMineCount = maxMines;
+    }
+
+    // Additional safety check
+    if (state.survivalMineCount < 1) {
+        state.survivalMineCount = 1;
     }
 
     // Update difficulty
@@ -1285,9 +1455,15 @@ function advanceSurvivalLevel() {
     drawBoard();
     updateStats();
 
+    // BUG #49 FIX: Track and clear previous timeout
+    if (state.survivalLevelTimeout) {
+        clearTimeout(state.survivalLevelTimeout);
+    }
+
     // Reset indicator after 2 seconds
-    setTimeout(() => {
+    state.survivalLevelTimeout = setTimeout(() => {
         updateTurnIndicator();
+        state.survivalLevelTimeout = null;
     }, 2000);
 }
 
@@ -1312,7 +1488,15 @@ function calculateScore() {
 }
 
 function useHint() {
+    // BUG #31 FIX: Check if mines are placed before accessing board
+    // BUG #42 FIX: Clear previous hint timeout before creating new one
+    // BUG #54 FIX: Validate board exists
     if (state.gameOver || !state.startTime || state.hintsRemaining <= 0) return;
+
+    if (!state.minesPlaced || !state.board || state.board.length === 0) {
+        console.warn('Cannot use hint: board not initialized');
+        return;
+    }
 
     // Hints don't work in Luck Mode since numbers are hidden
     if (state.gameMode === 'luck') {
@@ -1324,21 +1508,27 @@ function useHint() {
     for (let row = 0; row < state.difficulty.rows; row++) {
         for (let col = 0; col < state.difficulty.cols; col++) {
             const cell = state.board[row][col];
-            if (!cell.isRevealed && !cell.isMine && !cell.isFlagged) {
+            if (cell && !cell.isRevealed && !cell.isMine && !cell.isFlagged) {
                 safeCells.push({ row, col });
             }
         }
     }
 
     if (safeCells.length > 0) {
+        // Clear previous hint timeout if exists
+        if (state.hintTimeout) {
+            clearTimeout(state.hintTimeout);
+        }
+
         const hint = safeCells[Math.floor(Math.random() * safeCells.length)];
         state.hintCell = hint;
         state.hintsRemaining--;
         updateStats();
         drawBoard();
 
-        setTimeout(() => {
+        state.hintTimeout = setTimeout(() => {
             state.hintCell = null;
+            state.hintTimeout = null;
             drawBoard();
         }, 2000);
     }
@@ -1388,14 +1578,32 @@ function handleCanvasRightClick(e) {
 }
 
 function drawBoard() {
+    // BUG #51, #57, #60 FIXES: Validate canvas and board exist
     const canvas = document.getElementById('game-canvas');
+    if (!canvas) {
+        console.warn('Canvas element not found');
+        return;
+    }
+
     const ctx = canvas.getContext('2d');
+    if (!ctx) {
+        console.warn('Canvas context not available');
+        return;
+    }
+
+    if (!state.board || state.board.length === 0) {
+        console.warn('Board not initialized');
+        return;
+    }
 
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-    for (let row = 0; row < state.difficulty.rows; row++) {
-        for (let col = 0; col < state.difficulty.cols; col++) {
+    // BUG #57 FIX: Bounds validation in loop
+    for (let row = 0; row < state.difficulty.rows && row < state.board.length; row++) {
+        if (!state.board[row]) continue;
+        for (let col = 0; col < state.difficulty.cols && col < state.board[row].length; col++) {
             const cell = state.board[row][col];
+            if (!cell) continue;
             const x = col * state.cellSize;
             const y = row * state.cellSize;
 
@@ -1531,9 +1739,10 @@ function showGameResult(won, score, customMessage) {
     const seconds = state.elapsedTime % 60;
     const timeStr = `${minutes}:${seconds.toString().padStart(2, '0')}`;
 
-    // Calculate accuracy (safe clicks / total clicks)
-    const totalSafeTiles = (state.difficulty.rows * state.difficulty.cols) - state.difficulty.mines;
-    const accuracy = state.tilesClicked > 0 ? Math.round((state.tilesClicked / totalSafeTiles) * 100) : 0;
+    // BUG #75 FIX: Prevent division by zero in accuracy
+    const totalSafeTiles = Math.max(1, (state.difficulty.rows * state.difficulty.cols) - state.difficulty.mines);
+    const accuracy = (state.tilesClicked > 0 && totalSafeTiles > 0) ?
+        Math.round((state.tilesClicked / totalSafeTiles) * 100) : 0;
 
     resultScore.innerHTML = `
         <div style="margin: 20px 0; line-height: 1.8;">
@@ -1655,6 +1864,7 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 function quitGame() {
+    // BUG #34, #38, #41 FIXES: Comprehensive cleanup on quit
     // Confirm before quitting if game is in progress
     if (state.startTime && !state.gameOver) {
         if (!confirm('Are you sure you want to quit? Your progress will be lost.')) {
@@ -1662,7 +1872,23 @@ function quitGame() {
         }
     }
 
-    if (state.timerInterval) clearInterval(state.timerInterval);
+    // Clear ALL timers
+    if (state.timerInterval) {
+        clearInterval(state.timerInterval);
+        state.timerInterval = null;
+    }
+    if (state.hintTimeout) {
+        clearTimeout(state.hintTimeout);
+        state.hintTimeout = null;
+    }
+    if (state.survivalLevelTimeout) {
+        clearTimeout(state.survivalLevelTimeout);
+        state.survivalLevelTimeout = null;
+    }
+
+    // Reset game state
+    state.gameStarted = false;
+    state.gameOver = true; // Prevent any further game actions
 
     if (state.mode === 'multiplayer') {
         leaveRoom();
@@ -1676,20 +1902,26 @@ function quitGame() {
  * Populate profile screen with user data
  */
 function populateProfile() {
-    const user = getCurrentUser();
+    // BUG #59 FIX: Validate all elements exist
+    const user = getCurrentUser && typeof getCurrentUser === 'function' ? getCurrentUser() : null;
 
-    if (!user || typeof getCurrentUser !== 'function') {
+    if (!user) {
         console.warn('Cannot populate profile: user not found or auth.js not loaded');
         showScreen('login-screen');
         return;
     }
 
-    // Populate account info
-    document.getElementById('profile-username').textContent = user.username || 'Unknown';
-    document.getElementById('profile-email').textContent = user.email || 'N/A';
+    // Populate account info with null checks
+    const usernameEl = document.getElementById('profile-username');
+    const emailEl = document.getElementById('profile-email');
+
+    if (usernameEl) usernameEl.textContent = user.username || 'Unknown';
+    if (emailEl) emailEl.textContent = user.email || 'N/A';
 
     // Show verification status
     const verifiedEl = document.getElementById('profile-verified');
+    if (!verifiedEl) return; // Exit if element doesn't exist
+
     if (user.is_verified) {
         verifiedEl.textContent = '✓ Verified';
         verifiedEl.style.color = '#2ecc71';
