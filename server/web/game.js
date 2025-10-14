@@ -161,74 +161,138 @@ function setupEventListeners() {
     });
     document.getElementById('back-to-lobby').addEventListener('click', () => showScreen('lobby-screen'));
 
-    // Game mode selection - with mobile touch support
-    const handleModeSelection = (e) => {
-        if (e) e.preventDefault();
-        const mode = e.target.closest('.mode-card').dataset.mode;
-        console.log('Mode selected:', mode);
-
-        // Time Bomb mode needs difficulty selection first
-        if (mode === 'timebomb') {
-            showScreen('timebomb-difficulty-screen');
-            return;
-        }
-
-        // Check if we're in solo or multiplayer flow
-        if (state.socket && state.socket.connected) {
-            createRoom(mode);
-        } else {
-            startSoloGame(mode);
-        }
-    };
-
+    // Game mode selection - with proper mobile support (prevent double-fire)
     document.querySelectorAll('.select-mode').forEach(btn => {
-        btn.addEventListener('click', handleModeSelection);
-        btn.addEventListener('touchend', handleModeSelection);
+        btn.addEventListener('touchend', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            preventClickAfterTouch();
+            const mode = e.target.closest('.mode-card').dataset.mode;
+            console.log('Mode selected (TOUCH):', mode);
+
+            // Time Bomb mode needs difficulty selection first
+            if (mode === 'timebomb') {
+                showScreen('timebomb-difficulty-screen');
+                return;
+            }
+
+            // Check if we're in solo or multiplayer flow
+            if (state.socket && state.socket.connected) {
+                createRoom(mode);
+            } else {
+                startSoloGame(mode);
+            }
+        }, { passive: false });
+
+        btn.addEventListener('click', (e) => {
+            if (touchHandled) {
+                e.preventDefault();
+                return;
+            }
+            e.preventDefault();
+            const mode = e.target.closest('.mode-card').dataset.mode;
+            console.log('Mode selected (CLICK):', mode);
+
+            // Time Bomb mode needs difficulty selection first
+            if (mode === 'timebomb') {
+                showScreen('timebomb-difficulty-screen');
+                return;
+            }
+
+            // Check if we're in solo or multiplayer flow
+            if (state.socket && state.socket.connected) {
+                createRoom(mode);
+            } else {
+                startSoloGame(mode);
+            }
+        });
     });
 
     const backToLobby2Btn = document.getElementById('back-to-lobby2');
     if (backToLobby2Btn) {
-        const handleBackToLobby2 = (e) => {
-            if (e) e.preventDefault();
-            // Back to lobby if multiplayer, otherwise back to mode selection
+        backToLobby2Btn.addEventListener('touchend', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            preventClickAfterTouch();
+            console.log('Back to lobby2 (TOUCH)');
             if (state.socket && state.socket.connected) {
                 showScreen('lobby-screen');
             } else {
                 showScreen('mode-screen');
             }
-        };
-        backToLobby2Btn.addEventListener('click', handleBackToLobby2);
-        backToLobby2Btn.addEventListener('touchend', handleBackToLobby2);
+        }, { passive: false });
+
+        backToLobby2Btn.addEventListener('click', (e) => {
+            if (touchHandled) {
+                e.preventDefault();
+                return;
+            }
+            e.preventDefault();
+            console.log('Back to lobby2 (CLICK)');
+            if (state.socket && state.socket.connected) {
+                showScreen('lobby-screen');
+            } else {
+                showScreen('mode-screen');
+            }
+        });
     }
 
-    // Time Bomb difficulty selection - with mobile touch support
-    const handleDifficultySelection = (e) => {
-        if (e) e.preventDefault();
-        const difficulty = e.target.closest('.mode-card').dataset.difficulty;
-        state.timebombDifficulty = difficulty;
-        console.log('Difficulty selected:', difficulty);
-
-        // Check if we're in solo or multiplayer flow
-        if (state.socket && state.socket.connected) {
-            createRoom('timebomb');
-        } else {
-            startSoloGame('timebomb');
-        }
-    };
-
+    // Time Bomb difficulty selection - with proper mobile support (prevent double-fire)
     document.querySelectorAll('.select-difficulty').forEach(btn => {
-        btn.addEventListener('click', handleDifficultySelection);
-        btn.addEventListener('touchend', handleDifficultySelection);
+        btn.addEventListener('touchend', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            preventClickAfterTouch();
+            const difficulty = e.target.closest('.mode-card').dataset.difficulty;
+            state.timebombDifficulty = difficulty;
+            console.log('Difficulty selected (TOUCH):', difficulty);
+
+            // Check if we're in solo or multiplayer flow
+            if (state.socket && state.socket.connected) {
+                createRoom('timebomb');
+            } else {
+                startSoloGame('timebomb');
+            }
+        }, { passive: false });
+
+        btn.addEventListener('click', (e) => {
+            if (touchHandled) {
+                e.preventDefault();
+                return;
+            }
+            e.preventDefault();
+            const difficulty = e.target.closest('.mode-card').dataset.difficulty;
+            state.timebombDifficulty = difficulty;
+            console.log('Difficulty selected (CLICK):', difficulty);
+
+            // Check if we're in solo or multiplayer flow
+            if (state.socket && state.socket.connected) {
+                createRoom('timebomb');
+            } else {
+                startSoloGame('timebomb');
+            }
+        });
     });
 
     const backToGamemodeBtn = document.getElementById('back-to-gamemode');
     if (backToGamemodeBtn) {
-        const handleBackToGamemode = (e) => {
-            if (e) e.preventDefault();
+        backToGamemodeBtn.addEventListener('touchend', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            preventClickAfterTouch();
+            console.log('Back to gamemode (TOUCH)');
             showScreen('gamemode-screen');
-        };
-        backToGamemodeBtn.addEventListener('click', handleBackToGamemode);
-        backToGamemodeBtn.addEventListener('touchend', handleBackToGamemode);
+        }, { passive: false });
+
+        backToGamemodeBtn.addEventListener('click', (e) => {
+            if (touchHandled) {
+                e.preventDefault();
+                return;
+            }
+            e.preventDefault();
+            console.log('Back to gamemode (CLICK)');
+            showScreen('gamemode-screen');
+        });
     }
 
     // Waiting room
