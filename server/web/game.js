@@ -354,12 +354,22 @@ function setupEventListeners() {
 
     // Mouse hover effect
     canvas.addEventListener('mousemove', (e) => {
+        const CANVAS_BORDER_WIDTH = 3;
         const rect = canvas.getBoundingClientRect();
-        const x = e.clientX - rect.left;
-        const y = e.clientY - rect.top;
+        const x = e.clientX - rect.left - CANVAS_BORDER_WIDTH;
+        const y = e.clientY - rect.top - CANVAS_BORDER_WIDTH;
 
         const col = Math.floor(x / state.cellSize);
         const row = Math.floor(y / state.cellSize);
+
+        // Bounds checking to prevent hover outside board
+        if (row < 0 || row >= state.difficulty.rows || col < 0 || col >= state.difficulty.cols) {
+            if (state.hoverCell !== null) {
+                state.hoverCell = null;
+                drawBoard();
+            }
+            return;
+        }
 
         // Only update if hover cell changed
         if (!state.hoverCell || state.hoverCell.row !== row || state.hoverCell.col !== col) {
@@ -984,8 +994,10 @@ function placeMines(excludeRow, excludeCol) {
     let minesPlaced = 0;
     const excludeCells = new Set();
 
-    for (let dr = -1; dr <= 1; dr++) {
-        for (let dc = -1; dc <= 1; dc++) {
+    // Larger exclusion zone (5x5) to ensure first click always flood fills
+    // This guarantees the clicked cell and its neighbors have 0 adjacent mines
+    for (let dr = -2; dr <= 2; dr++) {
+        for (let dc = -2; dc <= 2; dc++) {
             const r = excludeRow + dr;
             const c = excludeCol + dc;
             if (r >= 0 && r < state.difficulty.rows && c >= 0 && c < state.difficulty.cols) {
