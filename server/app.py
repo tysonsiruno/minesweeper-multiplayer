@@ -143,28 +143,20 @@ def register():
     if User.query.filter_by(email=email).first():
         return jsonify({'success': False, 'message': 'Email already registered'}), 400
 
-    # Create user
+    # Create user (auto-verified - no email setup)
     try:
-        user = User(username=username, email=email, password_hash=hash_password(password))
+        user = User(
+            username=username,
+            email=email,
+            password_hash=hash_password(password),
+            is_verified=True  # Auto-verify since no email service configured
+        )
         db.session.add(user)
         db.session.commit()
 
-        # Create verification token
-        token = EmailVerificationToken.generate_token()
-        verification = EmailVerificationToken(
-            user_id=user.id,
-            token=token,
-            expires_at=datetime.utcnow() + timedelta(hours=24)
-        )
-        db.session.add(verification)
-        db.session.commit()
-
-        # Send verification email
-        send_verification_email(email, username, token)
-
         SecurityAuditLog.log_action(user.id, 'register', True, get_client_ip(), get_user_agent())
 
-        return jsonify({'success': True, 'message': 'Registration successful. Please check your email to verify your account.', 'user_id': user.id})
+        return jsonify({'success': True, 'message': 'Registration successful! You can now log in.', 'user_id': user.id})
     except Exception as e:
         db.session.rollback()
         print(f'Registration error: {e}')
@@ -187,7 +179,7 @@ def login():
             user.failed_login_attempts += 1
             if user.failed_login_attempts >= 5:
                 user.locked_until = datetime.utcnow() + timedelta(minutes=15)
-                send_account_locked_email(user.email, user.username, 15)
+                # Email disabled: send_account_locked_email(user.email, user.username, 15)
             db.session.commit()
         SecurityAuditLog.log_action(user.id if user else None, 'login', False, get_client_ip(), get_user_agent())
         return jsonify({'success': False, 'message': 'Invalid credentials'}), 401
@@ -231,89 +223,93 @@ def login():
         print(f'Login session creation error: {e}')
         return jsonify({'success': False, 'message': 'Login failed. Please try again.'}), 500
 
-@app.route('/api/auth/verify-email', methods=['GET'])
-def verify_email():
-    """Verify user email with token"""
-    token = request.args.get('token')
-    if not token:
-        return jsonify({'success': False, 'message': 'Token required'}), 400
+# Email verification disabled - no email service configured
+# @app.route('/api/auth/verify-email', methods=['GET'])
+# def verify_email():
+#     """Verify user email with token"""
+#     token = request.args.get('token')
+#     if not token:
+#         return jsonify({'success': False, 'message': 'Token required'}), 400
+#
+#     verification = EmailVerificationToken.query.filter_by(token=token).first()
+#     if not verification or verification.is_expired() or verification.is_used():
+#         return jsonify({'success': False, 'message': 'Invalid or expired token'}), 400
+#
+#     try:
+#         user = User.query.get(verification.user_id)
+#         user.is_verified = True
+#         verification.used_at = datetime.utcnow()
+#         db.session.commit()
+#
+#         send_welcome_email(user.email, user.username)
+#         SecurityAuditLog.log_action(user.id, 'email_verified', True, get_client_ip(), get_user_agent())
+#
+#         return jsonify({'success': True, 'message': 'Email verified successfully!'})
+#     except Exception as e:
+#         db.session.rollback()
+#         print(f'Email verification error: {e}')
+#         return jsonify({'success': False, 'message': 'Verification failed. Please try again.'}), 500
 
-    verification = EmailVerificationToken.query.filter_by(token=token).first()
-    if not verification or verification.is_expired() or verification.is_used():
-        return jsonify({'success': False, 'message': 'Invalid or expired token'}), 400
+# Password reset via email disabled - no email service configured
+# To re-enable: uncomment this endpoint and configure SendGrid
+# @app.route('/api/auth/forgot-password', methods=['POST'])
+# @limiter.limit("3 per hour")
+# def forgot_password():
+#     """Request password reset"""
+#     data = request.json
+#     email = sanitize_input(data.get('email', ''), 255).lower()
+#
+#     user = User.query.filter_by(email=email).first()
+#     if user:
+#         try:
+#             token = PasswordResetToken.generate_token()
+#             reset = PasswordResetToken(
+#                 user_id=user.id,
+#                 token=token,
+#                 expires_at=datetime.utcnow() + timedelta(hours=1),
+#                 ip_address=get_client_ip()
+#             )
+#             db.session.add(reset)
+#             db.session.commit()
+#             send_password_reset_email(email, user.username, token)
+#         except Exception as e:
+#             db.session.rollback()
+#             print(f'Password reset token creation error: {e}')
+#             return jsonify({'success': False, 'message': 'Failed to send reset link. Please try again.'}), 500
+#
+#     return jsonify({'success': True, 'message': 'If email exists, reset link has been sent'})
 
-    try:
-        user = User.query.get(verification.user_id)
-        user.is_verified = True
-        verification.used_at = datetime.utcnow()
-        db.session.commit()
-
-        send_welcome_email(user.email, user.username)
-        SecurityAuditLog.log_action(user.id, 'email_verified', True, get_client_ip(), get_user_agent())
-
-        return jsonify({'success': True, 'message': 'Email verified successfully!'})
-    except Exception as e:
-        db.session.rollback()
-        print(f'Email verification error: {e}')
-        return jsonify({'success': False, 'message': 'Verification failed. Please try again.'}), 500
-
-@app.route('/api/auth/forgot-password', methods=['POST'])
-@limiter.limit("3 per hour")
-def forgot_password():
-    """Request password reset"""
-    data = request.json
-    email = sanitize_input(data.get('email', ''), 255).lower()
-
-    user = User.query.filter_by(email=email).first()
-    if user:
-        try:
-            token = PasswordResetToken.generate_token()
-            reset = PasswordResetToken(
-                user_id=user.id,
-                token=token,
-                expires_at=datetime.utcnow() + timedelta(hours=1),
-                ip_address=get_client_ip()
-            )
-            db.session.add(reset)
-            db.session.commit()
-            send_password_reset_email(email, user.username, token)
-        except Exception as e:
-            db.session.rollback()
-            print(f'Password reset token creation error: {e}')
-            return jsonify({'success': False, 'message': 'Failed to send reset link. Please try again.'}), 500
-
-    return jsonify({'success': True, 'message': 'If email exists, reset link has been sent'})
-
-@app.route('/api/auth/reset-password', methods=['POST'])
-def reset_password():
-    """Reset password with token"""
-    data = request.json
-    token = data.get('token')
-    new_password = data.get('new_password')
-
-    valid, msg = validate_password(new_password)
-    if not valid:
-        return jsonify({'success': False, 'message': msg}), 400
-
-    reset = PasswordResetToken.query.filter_by(token=token).first()
-    if not reset or reset.is_expired() or reset.is_used():
-        return jsonify({'success': False, 'message': 'Invalid or expired token'}), 400
-
-    try:
-        user = User.query.get(reset.user_id)
-        user.password_hash = hash_password(new_password)
-        reset.used_at = datetime.utcnow()
-
-        # Invalidate all sessions
-        Session.query.filter_by(user_id=user.id).delete()
-        db.session.commit()
-
-        SecurityAuditLog.log_action(user.id, 'password_reset', True, get_client_ip(), get_user_agent())
-        return jsonify({'success': True, 'message': 'Password reset successfully'})
-    except Exception as e:
-        db.session.rollback()
-        print(f'Password reset error: {e}')
-        return jsonify({'success': False, 'message': 'Password reset failed. Please try again.'}), 500
+# Password reset endpoint disabled (depends on email)
+# @app.route('/api/auth/reset-password', methods=['POST'])
+# def reset_password():
+#     """Reset password with token"""
+#     data = request.json
+#     token = data.get('token')
+#     new_password = data.get('new_password')
+#
+#     valid, msg = validate_password(new_password)
+#     if not valid:
+#         return jsonify({'success': False, 'message': msg}), 400
+#
+#     reset = PasswordResetToken.query.filter_by(token=token).first()
+#     if not reset or reset.is_expired() or reset.is_used():
+#         return jsonify({'success': False, 'message': 'Invalid or expired token'}), 400
+#
+#     try:
+#         user = User.query.get(reset.user_id)
+#         user.password_hash = hash_password(new_password)
+#         reset.used_at = datetime.utcnow()
+#
+#         # Invalidate all sessions
+#         Session.query.filter_by(user_id=user.id).delete()
+#         db.session.commit()
+#
+#         SecurityAuditLog.log_action(user.id, 'password_reset', True, get_client_ip(), get_user_agent())
+#         return jsonify({'success': True, 'message': 'Password reset successfully'})
+#     except Exception as e:
+#         db.session.rollback()
+#         print(f'Password reset error: {e}')
+#         return jsonify({'success': False, 'message': 'Password reset failed. Please try again.'}), 500
 
 @app.route('/api/auth/logout', methods=['POST'])
 @token_required
@@ -379,38 +375,39 @@ def refresh_token():
         print(f'Token refresh error: {e}')
         return jsonify({'success': False, 'message': 'Token refresh failed. Please try again.'}), 500
 
-@app.route('/api/auth/resend-verification', methods=['POST'])
-@token_required
-@limiter.limit("3 per hour")
-def resend_verification(current_user):
-    """Resend email verification"""
-    if current_user.is_verified:
-        return jsonify({'success': False, 'message': 'Email already verified'}), 400
-
-    try:
-        # Invalidate old tokens
-        EmailVerificationToken.query.filter_by(user_id=current_user.id, used_at=None).delete()
-
-        # Create new verification token
-        token = EmailVerificationToken.generate_token()
-        verification = EmailVerificationToken(
-            user_id=current_user.id,
-            token=token,
-            expires_at=datetime.utcnow() + timedelta(hours=24)
-        )
-        db.session.add(verification)
-        db.session.commit()
-
-        # Send verification email
-        send_verification_email(current_user.email, current_user.username, token)
-
-        SecurityAuditLog.log_action(current_user.id, 'resend_verification', True, get_client_ip(), get_user_agent())
-
-        return jsonify({'success': True, 'message': 'Verification email sent'})
-    except Exception as e:
-        db.session.rollback()
-        print(f'Resend verification error: {e}')
-        return jsonify({'success': False, 'message': 'Failed to send verification email. Please try again.'}), 500
+# Email verification disabled - no email service configured
+# @app.route('/api/auth/resend-verification', methods=['POST'])
+# @token_required
+# @limiter.limit("3 per hour")
+# def resend_verification(current_user):
+#     """Resend email verification"""
+#     if current_user.is_verified:
+#         return jsonify({'success': False, 'message': 'Email already verified'}), 400
+#
+#     try:
+#         # Invalidate old tokens
+#         EmailVerificationToken.query.filter_by(user_id=current_user.id, used_at=None).delete()
+#
+#         # Create new verification token
+#         token = EmailVerificationToken.generate_token()
+#         verification = EmailVerificationToken(
+#             user_id=current_user.id,
+#             token=token,
+#             expires_at=datetime.utcnow() + timedelta(hours=24)
+#         )
+#         db.session.add(verification)
+#         db.session.commit()
+#
+#         # Send verification email
+#         send_verification_email(current_user.email, current_user.username, token)
+#
+#         SecurityAuditLog.log_action(current_user.id, 'resend_verification', True, get_client_ip(), get_user_agent())
+#
+#         return jsonify({'success': True, 'message': 'Verification email sent'})
+#     except Exception as e:
+#         db.session.rollback()
+#         print(f'Resend verification error: {e}')
+#         return jsonify({'success': False, 'message': 'Failed to send verification email. Please try again.'}), 500
 
 @app.route('/api/rooms/list', methods=['GET'])
 def list_rooms():
