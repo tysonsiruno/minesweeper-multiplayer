@@ -62,10 +62,31 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 function setupEventListeners() {
-    // Mode selection
-    document.getElementById('solo-btn').addEventListener('click', () => showScreen('gamemode-screen'));
-    document.getElementById('multiplayer-btn').addEventListener('click', () => showMultiplayerLobby());
-    document.getElementById('back-to-main').addEventListener('click', () => showScreen('main-screen'));
+    // Mode selection - with null checks
+    const soloBtn = document.getElementById('solo-btn');
+    if (soloBtn) {
+        soloBtn.addEventListener('click', () => {
+            console.log('Solo button clicked');
+            showScreen('gamemode-screen');
+        });
+    } else {
+        console.error('solo-btn element not found in DOM');
+    }
+
+    const multiplayerBtn = document.getElementById('multiplayer-btn');
+    if (multiplayerBtn) {
+        multiplayerBtn.addEventListener('click', () => {
+            console.log('Multiplayer button clicked');
+            showMultiplayerLobby();
+        });
+    } else {
+        console.error('multiplayer-btn element not found in DOM');
+    }
+
+    const backToMainBtn = document.getElementById('back-to-main');
+    if (backToMainBtn) {
+        backToMainBtn.addEventListener('click', () => showScreen('main-screen'));
+    }
 
     // Lobby
     document.getElementById('create-room-btn').addEventListener('click', () => showScreen('gamemode-screen'));

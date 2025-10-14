@@ -197,19 +197,22 @@ async function register(username, email, password) {
 
         if (data.success) {
             if (successEl) {
-                successEl.textContent = 'Registration successful! Please check your email to verify your account.';
+                successEl.textContent = data.message || 'Registration successful! You can now log in.';
                 successEl.style.display = 'block';
             }
 
             // Clear form
-            document.getElementById('register-username').value = '';
-            document.getElementById('register-email').value = '';
-            document.getElementById('register-password').value = '';
+            const usernameEl = document.getElementById('register-username');
+            const emailEl = document.getElementById('register-email');
+            const passwordEl = document.getElementById('register-password');
+            if (usernameEl) usernameEl.value = '';
+            if (emailEl) emailEl.value = '';
+            if (passwordEl) passwordEl.value = '';
 
-            // Switch to login screen after 3 seconds
+            // Switch to login screen after 2 seconds
             setTimeout(() => {
                 showScreen('login-screen');
-            }, 3000);
+            }, 2000);
 
             return true;
         } else {

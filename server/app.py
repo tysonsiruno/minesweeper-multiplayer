@@ -193,6 +193,11 @@ def login():
     try:
         user.failed_login_attempts = 0
         user.last_login = datetime.utcnow()
+
+        # Auto-verify existing users (migration fix for disabled email verification)
+        if not user.is_verified:
+            user.is_verified = True
+
         db.session.commit()
 
         # Generate tokens
