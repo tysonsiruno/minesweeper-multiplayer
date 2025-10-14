@@ -305,6 +305,11 @@ input[type="text"]:focus {
     border-radius: 10px;
     cursor: pointer;
     background: #ecf0f1;
+    transition: transform 0.1s ease;
+}
+
+#game-canvas:active {
+    transform: scale(0.98);
 }
 
 .game-sidebar {
@@ -378,10 +383,22 @@ input[type="text"]:focus {
     justify-content: center;
     align-items: center;
     z-index: 1000;
+    opacity: 0;
+    transition: opacity 0.3s ease;
 }
 
 .overlay.active {
     display: flex;
+    animation: fadeIn 0.3s ease forwards;
+}
+
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+    }
+    to {
+        opacity: 1;
+    }
 }
 
 .result-content {
@@ -391,6 +408,18 @@ input[type="text"]:focus {
     text-align: center;
     color: #333;
     max-width: 400px;
+    animation: popIn 0.4s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+}
+
+@keyframes popIn {
+    0% {
+        transform: scale(0.5);
+        opacity: 0;
+    }
+    100% {
+        transform: scale(1);
+        opacity: 1;
+    }
 }
 
 #result-text {

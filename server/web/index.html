@@ -176,6 +176,7 @@
                         <div class="game-controls">
                             <button id="hint-btn" class="btn btn-small">Hint (H)</button>
                             <button id="new-game-btn" class="btn btn-small">New Game</button>
+                            <button id="mute-btn" class="btn btn-small">🔊 Sound</button>
                             <button id="quit-btn" class="btn btn-small btn-secondary">Quit</button>
                         </div>
                     </div>
@@ -190,6 +191,24 @@
                 <div id="result-emoji"></div>
                 <p id="result-score"></p>
                 <button id="result-ok-btn" class="btn btn-primary">OK</button>
+            </div>
+        </div>
+
+        <!-- Keyboard Shortcuts Help Overlay -->
+        <div id="shortcuts-overlay" class="overlay">
+            <div class="result-content">
+                <h1>⌨️ Keyboard Shortcuts</h1>
+                <div style="text-align: left; margin: 20px; line-height: 2;">
+                    <div><strong>H</strong> - Use hint</div>
+                    <div><strong>?</strong> - Show/hide this help</div>
+                    <div><strong>ESC</strong> - Close overlays</div>
+                    <div><strong>Enter</strong> - Submit forms</div>
+                    <div><strong>Left Click</strong> - Reveal cell</div>
+                    <div><strong>Right Click</strong> - Flag mine</div>
+                    <div><strong>Long Press (Mobile)</strong> - Flag mine</div>
+                    <div><strong>Quick Tap (Mobile)</strong> - Reveal cell</div>
+                </div>
+                <button id="shortcuts-ok-btn" class="btn btn-primary">Got it!</button>
             </div>
         </div>
     </div>

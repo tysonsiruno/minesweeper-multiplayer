@@ -31,6 +31,7 @@ const state = {
     timerInterval: null,
     tilesClicked: 0, // Track tiles clicked for new scoring system
     totalGameClicks: 0, // For multiplayer: total clicks from all players
+    soundEnabled: true // Sound system toggle
 
     // Time Bomb mode variables
     timebombDifficulty: 'medium', // 'easy', 'medium', 'hard', 'impossible', 'hacker'
@@ -140,9 +141,14 @@ function setupEventListeners() {
     // Game controls
     document.getElementById('hint-btn').addEventListener('click', useHint);
     document.getElementById('new-game-btn').addEventListener('click', handleNewGame);
+    document.getElementById('mute-btn').addEventListener('click', toggleSound);
     document.getElementById('quit-btn').addEventListener('click', quitGame);
     document.getElementById('result-ok-btn').addEventListener('click', () => {
         document.getElementById('result-overlay').classList.remove('active');
+    });
+
+    document.getElementById('shortcuts-ok-btn').addEventListener('click', () => {
+        document.getElementById('shortcuts-overlay').classList.remove('active');
     });
 
     // Canvas events
@@ -210,6 +216,19 @@ function setupEventListeners() {
 
     // Keyboard shortcuts
     document.addEventListener('keydown', (e) => {
+        // Global shortcuts
+        if (e.key === '?' || (e.shiftKey && e.key === '/')) {
+            e.preventDefault();
+            const overlay = document.getElementById('shortcuts-overlay');
+            overlay.classList.toggle('active');
+        }
+
+        if (e.key === 'Escape') {
+            document.getElementById('shortcuts-overlay').classList.remove('active');
+            document.getElementById('result-overlay').classList.remove('active');
+        }
+
+        // Game screen shortcuts
         if (state.currentScreen === 'game-screen') {
             if (e.key === 'h' || e.key === 'H') useHint();
         }
@@ -424,12 +443,17 @@ function createRoom(gameMode) {
 }
 
 function joinRoom() {
-    const roomCode = document.getElementById('room-code-input').value.trim().toUpperCase();
+    const input = document.getElementById('room-code-input').value.trim().toUpperCase();
+    // Only allow hex characters (0-9, A-F)
+    const roomCode = input.replace(/[^A-F0-9]/g, '');
 
     if (!roomCode || roomCode.length !== 6) {
-        document.getElementById('join-error').textContent = 'Please enter a valid 6-character room code';
+        document.getElementById('join-error').textContent = 'Please enter a valid 6-character room code (letters and numbers only)';
         return;
     }
+
+    // Clear any error messages
+    document.getElementById('join-error').textContent = '';
 
     state.socket.emit('join_room', {
         room_code: roomCode,
@@ -1085,8 +1109,8 @@ function updateTimer() {
 function updateTimeBombTimer() {
     if (state.gameOver) return;
 
-    // Countdown timer for Time Bomb mode
-    state.timeRemaining--;
+    // Countdown timer for Time Bomb mode - use Math.max to prevent negative values
+    state.timeRemaining = Math.max(0, state.timeRemaining - 1);
     updateTurnIndicator();
 
     // Time's up! Game over
@@ -1227,6 +1251,40 @@ function displayGlobalLeaderboard(scores) {
         leaderboard.appendChild(div);
     });
 }
+
+// Sound System
+function toggleSound() {
+    state.soundEnabled = !state.soundEnabled;
+    const btn = document.getElementById('mute-btn');
+    btn.textContent = state.soundEnabled ? '🔊 Sound' : '🔇 Muted';
+
+    // Save preference to localStorage
+    localStorage.setItem('soundEnabled', state.soundEnabled);
+}
+
+function playSound(soundType) {
+    if (!state.soundEnabled) return;
+
+    // Foundation for future sound implementation
+    // soundType can be: 'click', 'flag', 'mine', 'win', 'hint'
+    // For now, this is a placeholder that does nothing
+    // Future: Add Web Audio API or HTML5 Audio elements
+
+    // Example for future implementation:
+    // const audio = new Audio(`/sounds/${soundType}.mp3`);
+    // audio.volume = 0.3;
+    // audio.play().catch(e => console.log('Audio play failed:', e));
+}
+
+// Load sound preference from localStorage on init
+document.addEventListener('DOMContentLoaded', () => {
+    const savedSound = localStorage.getItem('soundEnabled');
+    if (savedSound !== null) {
+        state.soundEnabled = savedSound === 'true';
+        const btn = document.getElementById('mute-btn');
+        if (btn) btn.textContent = state.soundEnabled ? '🔊 Sound' : '🔇 Muted';
+    }
+});
 
 function quitGame() {
     // Confirm before quitting if game is in progress

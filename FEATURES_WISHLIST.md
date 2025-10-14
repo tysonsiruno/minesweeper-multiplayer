@@ -419,40 +419,52 @@ Level 6: 18×18 = 324 tiles, 81 mines (25%)
 
 ### Can Be Done in <2 Hours Each:
 
-1. **Quit Confirmation Dialog** ✅ Easy
+1. **Quit Confirmation Dialog** ✅ COMPLETED
    - Add `confirm()` before quitting
+   - Implemented Oct 13, 2025
 
-2. **Timer Display for Standard Mode** ⏱️ Easy
+2. **Timer Display for Standard Mode** ✅ COMPLETED
    - Show elapsed time (not just clicks)
+   - Shows MM:SS format + clicks
+   - Implemented Oct 13, 2025
 
-3. **"Last Game" Stats** 📊 Easy
+3. **"Last Game" Stats** ✅ COMPLETED
    - Show summary after each game:
      - Time taken
      - Clicks used
      - Accuracy (safe clicks / total clicks)
      - Mines correctly flagged
+   - Implemented Oct 13, 2025
 
-4. **Color-Coded Difficulty Names** 🎨 Easy
+4. **Color-Coded Difficulty Names** ✅ COMPLETED
    - Easy = Green
    - Medium = Yellow
    - Hard = Orange
    - Impossible = Red
-   - Hacker = Purple
+   - Hacker = Purple (with glow!)
+   - Implemented Oct 13, 2025
 
-5. **Cell Hover Effects** ✨ Easy
+5. **Cell Hover Effects** ✅ COMPLETED
    - Highlight cell on mouse hover
    - Preview which cells would be revealed
+   - Implemented Oct 13, 2025
 
-6. **Flag Counter** 🚩 Easy
-   - Show "Flags: 5/40" instead of "Mines: 35"
+6. **Flag Counter** ✅ COMPLETED
+   - Show "🚩 Flags: 5/40" instead of "Mines: 35"
    - More intuitive
+   - Implemented Oct 13, 2025
 
-7. **Keyboard Shortcuts Help** ⌨️ Easy
+7. **Keyboard Shortcuts Help** ✅ COMPLETED
    - Press '?' to show keyboard shortcuts overlay
+   - ESC to close
+   - Implemented Oct 13, 2025
 
-8. **Volume Controls** 🔊 Easy
+8. **Volume Controls** ✅ COMPLETED (Foundation)
    - Mute/unmute button
-   - Volume slider
+   - LocalStorage persistence
+   - Sound system framework ready
+   - Implemented Oct 13, 2025
+   - Note: Actual sound files need to be added
 
 ---
 
