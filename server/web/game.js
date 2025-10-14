@@ -918,10 +918,7 @@ function resetGame() {
     // Initialize Time Bomb mode countdown
     if (state.gameMode === 'timebomb') {
         state.timeRemaining = state.timebombStartTime[state.timebombDifficulty];
-        // ICantLose cheat: infinite time
-        if (state.username.toLowerCase() === 'icantlose') {
-            state.timeRemaining = 9999;
-        }
+        // ICantLose cheat disabled - no more infinite time
     }
 
     // Initialize Survival mode (only set mines, level is handled by handleNewGame or advanceSurvivalLevel)
@@ -1026,45 +1023,15 @@ function revealCell(row, col, isUserClick = true) {
     }
 
     // Time Bomb: Add time bonus ONLY for direct user clicks (not flood fill)
-    if (state.gameMode === 'timebomb' && !cell.isMine && isUserClick && state.username.toLowerCase() !== 'icantlose') {
+    if (state.gameMode === 'timebomb' && !cell.isMine && isUserClick) {
         state.timeRemaining += state.timebombTimeBonus[state.timebombDifficulty];
         updateTurnIndicator();
     }
 
     if (cell.isMine) {
-        // ICantLose cheat: Skip mine death (SOLO MODE ONLY - cheat breaks multiplayer sync)
-        if (state.username.toLowerCase() === 'icantlose' && state.mode === 'solo') {
-            // Just reveal the mine but don't die
-            cell.isMine = false;
-            cell.adjacentMines = 0;
-            // Recalculate adjacent numbers for nearby cells
-            for (let dr = -1; dr <= 1; dr++) {
-                for (let dc = -1; dc <= 1; dc++) {
-                    const r = row + dr;
-                    const c = col + dc;
-                    if (r >= 0 && r < state.difficulty.rows && c >= 0 && c < state.difficulty.cols) {
-                        if (!state.board[r][c].isMine) {
-                            let count = 0;
-                            for (let dr2 = -1; dr2 <= 1; dr2++) {
-                                for (let dc2 = -1; dc2 <= 1; dc2++) {
-                                    if (dr2 === 0 && dc2 === 0) continue;
-                                    const r2 = r + dr2;
-                                    const c2 = c + dc2;
-                                    if (r2 >= 0 && r2 < state.difficulty.rows && c2 >= 0 && c2 < state.difficulty.cols) {
-                                        if (state.board[r2][c2].isMine) count++;
-                                    }
-                                }
-                            }
-                            state.board[r][c].adjacentMines = count;
-                        }
-                    }
-                }
-            }
-            updateStats();
-            drawBoard();
-            checkWin();
-            return;
-        }
+        // ICantLose cheat DISABLED - bombs now always end the game
+        // (The cheat was causing bugs where mines would be deleted instead of ending the game)
+        // Name masking still works, but you can still hit mines
 
         state.gameOver = true;
         revealAllMines();
@@ -1122,8 +1089,8 @@ function toggleFlag(row, col) {
     cell.isFlagged = !cell.isFlagged;
     state.flagsPlaced += cell.isFlagged ? 1 : -1;
 
-    // Time Bomb: Add +1 second for placing flag (not removing, not for cheat username)
-    if (state.gameMode === 'timebomb' && cell.isFlagged && !wasFlagged && state.username.toLowerCase() !== 'icantlose') {
+    // Time Bomb: Add +1 second for placing flag (not removing)
+    if (state.gameMode === 'timebomb' && cell.isFlagged && !wasFlagged) {
         state.timeRemaining += 1;
         updateTurnIndicator();
     }
