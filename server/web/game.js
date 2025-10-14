@@ -87,7 +87,6 @@ function setupEventListeners() {
             e.preventDefault();
             e.stopPropagation();
             preventClickAfterTouch();
-            console.log('Solo button TOUCH');
             state.mode = 'solo';
             showScreen('gamemode-screen');
         }, { passive: false });
@@ -98,11 +97,9 @@ function setupEventListeners() {
                 return;
             }
             e.preventDefault();
-            console.log('Solo button CLICK');
             state.mode = 'solo';
             showScreen('gamemode-screen');
         });
-        console.log('✓ Solo button listeners attached');
     } else {
         console.error('✗ solo-btn NOT FOUND');
     }
@@ -113,7 +110,6 @@ function setupEventListeners() {
             e.preventDefault();
             e.stopPropagation();
             preventClickAfterTouch();
-            console.log('Multiplayer button TOUCH');
             state.mode = 'multiplayer';
             showMultiplayerLobby();
         }, { passive: false });
@@ -124,53 +120,150 @@ function setupEventListeners() {
                 return;
             }
             e.preventDefault();
-            console.log('Multiplayer button CLICK');
             state.mode = 'multiplayer';
             showMultiplayerLobby();
         });
-        console.log('✓ Multiplayer button listeners attached');
     } else {
         console.error('✗ multiplayer-btn NOT FOUND');
     }
 
-    const backToMainBtn = document.getElementById('back-to-main');
-    if (backToMainBtn) {
-        backToMainBtn.addEventListener('touchend', (e) => {
+    const backToUsernameBtn = document.getElementById('back-to-username');
+    if (backToUsernameBtn) {
+        backToUsernameBtn.addEventListener('touchend', (e) => {
             e.preventDefault();
             e.stopPropagation();
             preventClickAfterTouch();
-            console.log('Back button TOUCH');
-            showScreen('main-screen');
+            showScreen('username-screen');
         }, { passive: false });
 
-        backToMainBtn.addEventListener('click', (e) => {
+        backToUsernameBtn.addEventListener('click', (e) => {
             if (touchHandled) {
                 e.preventDefault();
                 return;
             }
             e.preventDefault();
-            console.log('Back button CLICK');
-            showScreen('main-screen');
+            showScreen('username-screen');
         });
-        console.log('✓ Back button listeners attached');
-    } else {
-        console.error('✗ back-to-main NOT FOUND');
+    }
+
+    // Username submission
+    const usernameSubmit = document.getElementById('username-submit');
+    const usernameInput = document.getElementById('username-input');
+
+    if (usernameSubmit && usernameInput) {
+        const handleUsernameSubmit = () => {
+            let username = usernameInput.value.trim();
+            if (username.length > 0) {
+                // RANDOM USERNAME GENERATOR: "random" gives self-deprecating names
+                if (username.toLowerCase() === 'random') {
+                    const selfDeprecatingNames = [
+                        'ImActuallyTrash', 'PleaseCarryMe', 'SorryInAdvance', 'FirstTimePlaying',
+                        'IDontKnowWhatImDoing', 'HelpMePls', 'ImSoBad', 'CantClickRight',
+                        'AccidentallyHere', 'WrongGameSorry', 'ImTrying', 'LearningStill',
+                        'NoIdeaWhatsGoingOn', 'CompleteBeginner', 'TerriblePlayer', 'WillProbablyLose',
+                        'NotVeryGood', 'KindaBadAtThis', 'LosingIsMyStyle', 'MistakesMeEverywhere',
+                        'ConfusedConstantly', 'BadDecisionMaker', 'ClickRandomly', 'HopeForTheBest',
+                        'LuckBasedPlayer', 'NoSkillHere', 'PurelyGuessing', 'WhatAmIDoing',
+                        'CantReadNumbers', 'ColorBlindMaybe', 'SlowReactionTime', 'FingerSlipped',
+                        'WrongButtonPressed', 'AccidentalClick', 'DidntMeanTo', 'MyBadSorry',
+                        'IApologizeInAdvance', 'GonnaMissUp', 'WatchMeFail', 'DisappointmentIncoming',
+                        'LowExpectations', 'ProbablyAFK', 'LaggingHard', 'BadConnection',
+                        'BrokenMouse', 'StickyKeyboard', 'CantSeeScreen', 'WrongPrescription',
+                        'ForgotHowToPlay', 'RulesAreHard', 'TooComplicatedForMe', 'SimplyOutmatched',
+                        'NotMyGame', 'ShouldQuitNow', 'WhyAmIHere', 'MistakeMadeJoining',
+                        'WrongPlace', 'LostAndConfused', 'NeedATutorial', 'ReadTheManual',
+                        'WatchedNoVideos', 'ZeroExperience', 'NeverWonBefore', 'LossStreak',
+                        'ConsistentlyBad', 'ReliablyTerrible', 'PredictablyAwful', 'ExpectablyWorse',
+                        'BottomOfLeaderboard', 'LastPlacePlayer', 'EasyWinForYou', 'FreePoints',
+                        'GiftWrappedVictory', 'HandedYouTheWin', 'YoureFineIPromise', 'DontWorryAboutMe',
+                        'CarryOnWithoutMe', 'IllJustWatch', 'SpectatorMode', 'BenchWarmer',
+                        'SubstituteNeeded', 'WrongTeamMate', 'DeadWeightHere', 'AnchorDragging',
+                        'HoldingYouBack', 'SorryTeam', 'BlameMe', 'MyFault',
+                        'IMessedUp', 'CriticalError', 'FatalMistake', 'GameThrowingSkills',
+                        'SabotageExpert', 'FeedingChamp', 'IntentionallyBad', 'NaturallyAwful',
+                        'BornToLose', 'DestinedToFail', 'CursedWithBadLuck', 'UnluckyAlways',
+                        'MurphysLawPlayer', 'EverythingGoesWrong', 'WorstCaseScenario', 'DisasterWaiting',
+                        'TrainwreckIncoming', 'DumpsterFirePlayer', 'CompleteGarbage', 'AbsoluteTrash'
+                    ];
+                    username = selfDeprecatingNames[Math.floor(Math.random() * selfDeprecatingNames.length)];
+                    state.username = username;
+                    state.displayUsername = username;
+                }
+                // RANDOM USERNAME GENERATOR: "random1" gives two combined words
+                else if (username.toLowerCase() === 'random1') {
+                    const adjectives = [
+                        'Swift', 'Clever', 'Mighty', 'Silent', 'Brave', 'Wild', 'Cosmic', 'Electric',
+                        'Frozen', 'Golden', 'Shadow', 'Crystal', 'Thunder', 'Mystic', 'Ancient',
+                        'Blazing', 'Turbo', 'Mega', 'Ultra', 'Epic', 'Legendary', 'Supreme',
+                        'Phantom', 'Stealth', 'Cyber', 'Neon', 'Atomic', 'Quantum', 'Hyper',
+                        'Ninja', 'Dragon', 'Phoenix', 'Titan', 'Viper', 'Raven', 'Wolf'
+                    ];
+                    const nouns = [
+                        'Warrior', 'Hunter', 'Sniper', 'Striker', 'Guardian', 'Champion', 'Legend',
+                        'Master', 'Slayer', 'Destroyer', 'Raider', 'Reaper', 'Assassin', 'Ranger',
+                        'Knight', 'Samurai', 'Wizard', 'Sorcerer', 'Tempest', 'Storm', 'Blaze',
+                        'Vortex', 'Eclipse', 'Nova', 'Comet', 'Meteor', 'Galaxy', 'Nebula',
+                        'Raptor', 'Falcon', 'Eagle', 'Hawk', 'Tiger', 'Lion', 'Bear', 'Shark'
+                    ];
+                    const randomAdj = adjectives[Math.floor(Math.random() * adjectives.length)];
+                    const randomNoun = nouns[Math.floor(Math.random() * nouns.length)];
+                    username = randomAdj + randomNoun;
+                    state.username = username;
+                    state.displayUsername = username;
+                }
+                // ICantLose cheat: Mask the username for display with toxic/cocky names
+                else if (username.toLowerCase() === 'icantlose') {
+                    state.username = username;
+                    // Toxic/cocky usernames for display
+                    const toxicNames = [
+                        'RUEVNTRYNG?', 'EZWIN', 'UshouldPracticeMore', 'uhhhhisthatit?',
+                        'TooEZ4Me', 'GetGoodKid', 'NiceAttemptTho', 'IsThisEasyMode?',
+                        'YallTryingRight?', 'LiterallyAFK', 'OneHandedBTW', 'DidntEvenTry',
+                        'WasThatSupposedToBeHard', 'ImNotEvenWarmedUp', 'zzzzz'
+                    ];
+                    state.displayUsername = toxicNames[Math.floor(Math.random() * toxicNames.length)];
+                } else {
+                    state.username = username;
+                    state.displayUsername = username;
+                }
+
+                showScreen('mode-screen');
+            }
+        };
+
+        usernameSubmit.addEventListener('click', handleUsernameSubmit);
+        usernameInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                handleUsernameSubmit();
+            }
+        });
     }
 
     // Lobby
-    document.getElementById('create-room-btn').addEventListener('click', () => showScreen('gamemode-screen'));
-    document.getElementById('join-room-btn').addEventListener('click', () => showScreen('join-screen'));
-    document.getElementById('back-to-mode').addEventListener('click', () => {
+    // BUG #279 FIX: Add null checks before addEventListener
+    const createRoomBtn = document.getElementById('create-room-btn');
+    if (createRoomBtn) createRoomBtn.addEventListener('click', () => showScreen('gamemode-screen'));
+
+    const joinRoomBtn = document.getElementById('join-room-btn');
+    if (joinRoomBtn) joinRoomBtn.addEventListener('click', () => showScreen('join-screen'));
+
+    const backToModeBtn = document.getElementById('back-to-mode');
+    if (backToModeBtn) backToModeBtn.addEventListener('click', () => {
         disconnectSocket();
         showScreen('mode-screen');
     });
 
     // Join room
-    document.getElementById('join-submit').addEventListener('click', joinRoom);
-    document.getElementById('room-code-input').addEventListener('keypress', (e) => {
+    const joinSubmitBtn = document.getElementById('join-submit');
+    if (joinSubmitBtn) joinSubmitBtn.addEventListener('click', joinRoom);
+
+    const roomCodeInput = document.getElementById('room-code-input');
+    if (roomCodeInput) roomCodeInput.addEventListener('keypress', (e) => {
         if (e.key === 'Enter') joinRoom();
     });
-    document.getElementById('back-to-lobby').addEventListener('click', () => showScreen('lobby-screen'));
+
+    const backToLobbyBtn = document.getElementById('back-to-lobby');
+    if (backToLobbyBtn) backToLobbyBtn.addEventListener('click', () => showScreen('lobby-screen'));
 
     // Game mode selection - with proper mobile support (prevent double-fire)
     document.querySelectorAll('.select-mode').forEach(btn => {
@@ -178,8 +271,10 @@ function setupEventListeners() {
             e.preventDefault();
             e.stopPropagation();
             preventClickAfterTouch();
-            const mode = e.target.closest('.mode-card').dataset.mode;
-            console.log('Mode selected (TOUCH):', mode);
+            // BUG #280 FIX: Null check on closest() before accessing dataset
+            const modeCard = e.target.closest('.mode-card');
+            if (!modeCard) return;
+            const mode = modeCard.dataset.mode;
 
             // Store the pending game mode for difficulty selection
             state.pendingGameMode = mode;
@@ -221,8 +316,10 @@ function setupEventListeners() {
                 return;
             }
             e.preventDefault();
-            const mode = e.target.closest('.mode-card').dataset.mode;
-            console.log('Mode selected (CLICK):', mode);
+            // BUG #280 FIX: Null check on closest() before accessing dataset
+            const modeCard = e.target.closest('.mode-card');
+            if (!modeCard) return;
+            const mode = modeCard.dataset.mode;
 
             // Store the pending game mode for difficulty selection
             state.pendingGameMode = mode;
@@ -265,7 +362,6 @@ function setupEventListeners() {
             e.preventDefault();
             e.stopPropagation();
             preventClickAfterTouch();
-            console.log('Back to lobby2 (TOUCH)');
             if (state.socket && state.socket.connected) {
                 showScreen('lobby-screen');
             } else {
@@ -279,7 +375,6 @@ function setupEventListeners() {
                 return;
             }
             e.preventDefault();
-            console.log('Back to lobby2 (CLICK)');
             if (state.socket && state.socket.connected) {
                 showScreen('lobby-screen');
             } else {
@@ -294,9 +389,11 @@ function setupEventListeners() {
             e.preventDefault();
             e.stopPropagation();
             preventClickAfterTouch();
-            const difficulty = e.target.closest('.mode-card').dataset.difficulty;
+            // BUG #280 FIX: Null check on closest() before accessing dataset
+            const modeCard = e.target.closest('.mode-card');
+            if (!modeCard) return;
+            const difficulty = modeCard.dataset.difficulty;
             state.timebombDifficulty = difficulty;
-            console.log('Difficulty selected (TOUCH):', difficulty);
 
             // Check if we're already in a room (post-game mode selection)
             if (state.roomCode && state.socket && state.socket.connected) {
@@ -317,9 +414,11 @@ function setupEventListeners() {
                 return;
             }
             e.preventDefault();
-            const difficulty = e.target.closest('.mode-card').dataset.difficulty;
+            // BUG #280 FIX: Null check on closest() before accessing dataset
+            const modeCard = e.target.closest('.mode-card');
+            if (!modeCard) return;
+            const difficulty = modeCard.dataset.difficulty;
             state.timebombDifficulty = difficulty;
-            console.log('Difficulty selected (CLICK):', difficulty);
 
             // Check if we're already in a room (post-game mode selection)
             if (state.roomCode && state.socket && state.socket.connected) {
@@ -341,7 +440,6 @@ function setupEventListeners() {
             e.preventDefault();
             e.stopPropagation();
             preventClickAfterTouch();
-            console.log('Back to gamemode (TOUCH)');
             showScreen('gamemode-screen');
         }, { passive: false });
 
@@ -351,7 +449,6 @@ function setupEventListeners() {
                 return;
             }
             e.preventDefault();
-            console.log('Back to gamemode (CLICK)');
             showScreen('gamemode-screen');
         });
     }
@@ -362,9 +459,11 @@ function setupEventListeners() {
             e.preventDefault();
             e.stopPropagation();
             preventClickAfterTouch();
-            const boardDiff = e.target.closest('.mode-card').dataset.boardDifficulty;
+            // BUG #280 FIX: Null check on closest() before accessing dataset
+            const modeCard = e.target.closest('.mode-card');
+            if (!modeCard) return;
+            const boardDiff = modeCard.dataset.boardDifficulty;
             state.boardDifficulty = boardDiff;
-            console.log('Board difficulty selected (TOUCH):', boardDiff);
 
             // BUG #233 FIX: Validate difficulty exists before accessing
             if (!state.boardDifficulties[boardDiff]) {
@@ -406,9 +505,11 @@ function setupEventListeners() {
                 return;
             }
             e.preventDefault();
-            const boardDiff = e.target.closest('.mode-card').dataset.boardDifficulty;
+            // BUG #280 FIX: Null check on closest() before accessing dataset
+            const modeCard = e.target.closest('.mode-card');
+            if (!modeCard) return;
+            const boardDiff = modeCard.dataset.boardDifficulty;
             state.boardDifficulty = boardDiff;
-            console.log('Board difficulty selected (CLICK):', boardDiff);
 
             // BUG #233 FIX: Validate difficulty exists before accessing
             if (!state.boardDifficulties[boardDiff]) {
@@ -451,7 +552,6 @@ function setupEventListeners() {
             e.preventDefault();
             e.stopPropagation();
             preventClickAfterTouch();
-            console.log('Back to gamemode2 (TOUCH)');
             showScreen('gamemode-screen');
         }, { passive: false });
 
@@ -461,21 +561,36 @@ function setupEventListeners() {
                 return;
             }
             e.preventDefault();
-            console.log('Back to gamemode2 (CLICK)');
             showScreen('gamemode-screen');
         });
     }
 
     // Waiting room
-    document.getElementById('ready-btn').addEventListener('click', markReady);
-    document.getElementById('leave-room-btn').addEventListener('click', leaveRoom);
+    // BUG #279 FIX: Add null checks before addEventListener
+    const readyBtn = document.getElementById('ready-btn');
+    if (readyBtn) readyBtn.addEventListener('click', markReady);
+
+    const leaveRoomBtn = document.getElementById('leave-room-btn');
+    if (leaveRoomBtn) leaveRoomBtn.addEventListener('click', leaveRoom);
 
     // Game controls
-    document.getElementById('hint-btn').addEventListener('click', useHint);
-    document.getElementById('new-game-btn').addEventListener('click', handleNewGame);
-    document.getElementById('mute-btn').addEventListener('click', toggleSound);
-    document.getElementById('quit-btn').addEventListener('click', quitGame);
-    document.getElementById('result-ok-btn').addEventListener('click', () => {
+    const hintBtn = document.getElementById('hint-btn');
+    if (hintBtn) hintBtn.addEventListener('click', useHint);
+
+    const clearBtn = document.getElementById('clear-btn');
+    if (clearBtn) clearBtn.addEventListener('click', handleClearButton);
+
+    const newGameBtn = document.getElementById('new-game-btn');
+    if (newGameBtn) newGameBtn.addEventListener('click', handleNewGame);
+
+    const muteBtn = document.getElementById('mute-btn');
+    if (muteBtn) muteBtn.addEventListener('click', toggleSound);
+
+    const quitBtn = document.getElementById('quit-btn');
+    if (quitBtn) quitBtn.addEventListener('click', quitGame);
+
+    const resultOkBtn = document.getElementById('result-ok-btn');
+    if (resultOkBtn) resultOkBtn.addEventListener('click', () => {
         document.getElementById('result-overlay').classList.remove('active');
 
         // BUG #35, #80 FIXES: Reset gameStarted and validate players array
@@ -496,15 +611,26 @@ function setupEventListeners() {
                 // Non-host goes to waiting room
                 showWaitingRoom();
             }
+        } else {
+            // Solo mode - go back to mode selection
+            showScreen('mode-screen');
         }
     });
 
-    document.getElementById('shortcuts-ok-btn').addEventListener('click', () => {
-        document.getElementById('shortcuts-overlay').classList.remove('active');
+    const shortcutsOkBtn = document.getElementById('shortcuts-ok-btn');
+    if (shortcutsOkBtn) shortcutsOkBtn.addEventListener('click', () => {
+        const shortcutsOverlay = document.getElementById('shortcuts-overlay');
+        if (shortcutsOverlay) shortcutsOverlay.classList.remove('active');
     });
 
     // Canvas events
+    // BUG #281 FIX: Add null check before adding event listeners to canvas
     const canvas = document.getElementById('game-canvas');
+    if (!canvas) {
+        console.error('Game canvas not found');
+        return;
+    }
+
     canvas.addEventListener('click', handleCanvasClick);
     canvas.addEventListener('contextmenu', handleCanvasRightClick);
 
@@ -539,14 +665,21 @@ function setupEventListeners() {
         drawBoard();
     });
 
-    // Touch events for mobile
+    // RESPONSIVENESS FIX: Add debouncing and throttling for faster, more reliable clicks
     let touchStartTime = 0;
     let touchStartPos = null;
+    let lastClickTime = 0;
+    let lastClickCell = null;
     const CANVAS_BORDER_WIDTH = 3; // Canvas has 3px border in CSS
+    const CLICK_DEBOUNCE_MS = 50; // Prevent double-clicks within 50ms
+    const SAME_CELL_DEBOUNCE_MS = 200; // Prevent repeated clicks on same cell
 
     canvas.addEventListener('touchstart', (e) => {
         e.preventDefault();
+        e.stopPropagation(); // RESPONSIVENESS FIX: Stop event propagation
         touchStartTime = Date.now();
+        // BUG #282 FIX: Validate e.touches exists and has length
+        if (!e.touches || e.touches.length === 0) return;
         const touch = e.touches[0];
         const rect = canvas.getBoundingClientRect();
 
@@ -555,41 +688,67 @@ function setupEventListeners() {
         const y = touch.clientY - rect.top - CANVAS_BORDER_WIDTH;
 
         touchStartPos = { x, y };
-
-        console.log('Touch start:', { x, y, cellSize: state.cellSize });
-    });
+    }, { passive: false }); // RESPONSIVENESS FIX: passive: false for preventDefault to work
 
     canvas.addEventListener('touchend', (e) => {
         e.preventDefault();
+        e.stopPropagation(); // RESPONSIVENESS FIX: Stop event propagation
         if (!touchStartPos) return;
 
+        const now = Date.now();
+
         // BUG #78 FIX: Validate touch duration is positive
-        const touchDuration = Math.max(0, Date.now() - touchStartTime);
+        const touchDuration = Math.max(0, now - touchStartTime);
         const col = Math.floor(touchStartPos.x / state.cellSize);
         const row = Math.floor(touchStartPos.y / state.cellSize);
 
         // Bounds checking - ensure we're within the board
         if (row < 0 || row >= state.difficulty.rows || col < 0 || col >= state.difficulty.cols) {
-            console.log('Touch out of bounds:', { row, col, rows: state.difficulty.rows, cols: state.difficulty.cols });
             touchStartPos = null;
             return;
         }
 
-        console.log('Touch end:', { row, col, duration: touchDuration, username: state.username });
+        // RESPONSIVENESS FIX: Debouncing - prevent rapid repeated clicks
+        const cellKey = `${row},${col}`;
+        const timeSinceLastClick = now - lastClickTime;
 
-        if (touchDuration > 500) {
-            // Long press = flag
-            toggleFlag(row, col);
-        } else {
-            // Quick tap = reveal
-            if (!state.gameOver && state.hintCell && state.hintCell.row === row && state.hintCell.col === col) {
-                state.hintCell = null;
-            }
-            revealCell(row, col);
+        // Global debounce - prevent any clicks too close together
+        if (timeSinceLastClick < CLICK_DEBOUNCE_MS) {
+            touchStartPos = null;
+            return;
         }
 
+        // Same-cell debounce - prevent spamming same cell
+        if (lastClickCell === cellKey && timeSinceLastClick < SAME_CELL_DEBOUNCE_MS) {
+            touchStartPos = null;
+            return;
+        }
+
+        lastClickTime = now;
+        lastClickCell = cellKey;
+
+        // RESPONSIVENESS FIX: Use requestAnimationFrame for smoother updates
+        requestAnimationFrame(() => {
+            if (touchDuration > 500) {
+                // Long press = flag
+                toggleFlag(row, col);
+            } else {
+                // Quick tap = reveal
+                if (!state.gameOver && state.hintCell && state.hintCell.row === row && state.hintCell.col === col) {
+                    state.hintCell = null;
+                }
+                revealCell(row, col);
+            }
+        });
+
         touchStartPos = null;
-    });
+    }, { passive: false }); // RESPONSIVENESS FIX: passive: false for preventDefault to work
+
+    // RESPONSIVENESS FIX: Prevent touchmove from interfering with clicks
+    canvas.addEventListener('touchmove', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+    }, { passive: false });
 
     // Keyboard shortcuts
     document.addEventListener('keydown', (e) => {
@@ -621,82 +780,6 @@ function showScreen(screenId) {
     }
     screen.classList.add('active');
     state.currentScreen = screenId;
-
-    // Initialize username when entering main screen
-    if (screenId === 'main-screen') {
-        initializeUsername();
-    }
-
-    // Populate profile data when entering profile screen
-    if (screenId === 'profile-screen') {
-        populateProfile();
-    }
-}
-
-/**
- * Initialize username from authentication state
- * Called when user enters main screen after login/guest mode
- */
-function initializeUsername() {
-    // Get account username from auth.js (for stats)
-    const accountUsername = getCurrentUsername();
-
-    // Get display name from localStorage (what players see)
-    const displayName = localStorage.getItem('display_name') || accountUsername;
-
-    // Store account username for stats tracking
-    state.accountUsername = accountUsername;
-
-    // Use display name for gameplay
-    state.username = displayName;
-
-    // BUG #79 FIX: Validate displayName is not empty
-    if (!displayName || displayName.trim() === '') {
-        console.warn('Empty display name, using fallback');
-        displayName = accountUsername || 'Player';
-        state.username = displayName;
-    }
-
-    // ICantLose cheat: Mask the username for display purposes
-    if (displayName && displayName.toLowerCase() === 'icantlose') {
-        // Toxic/cocky usernames
-        const toxicNames = [
-            'RUEVNTRYNG?', 'EZWIN', 'UshouldPracticeMore', 'uhhhhisthatit?',
-            'TooEZ4Me', 'GetGoodKid', 'NiceAttemptTho', 'IsThisEasyMode?',
-            'YallTryingRight?', 'LiterallyAFK', 'OneHandedBTW', 'DidntEvenTry',
-            'WasThatSupposedToBeHard', 'ImNotEvenWarmedUp', 'zzzzz',
-            'WakeUpPeople', 'ThisIsTrainingMode?', 'CanIGetASmurf',
-            'MyGrandmaBetter', 'PlayingWithFeet', 'MiceOnlyChallenge',
-            'FirstTimeAndWhat', 'AmIPlayingBots?', 'YallSeriousRN',
-            'TryHarderNextTime', 'LaggedForThat', 'AlmostHadMe',
-            'NiceWarmup', 'BackToTutorial', 'UninstallPls', 'Outplayed',
-            'SkillDiff', 'TouchGrassMaybe', 'GGNoRe', 'ThanksForTheWin',
-            'StillLearning?', 'BetterLuckNextGame', 'ICarriedTbh',
-            'SoloQueueThings', 'NeedAHandicap?', 'YawnFest',
-            'WhatsMinesweeper', 'JustClickedRandom', 'BlindPlaythrough',
-            'ControllerDisconnected', 'WrongGameBro', 'CasualPlayers',
-            'WhereTheChallenge', 'ThisWasRanked?', 'FreeElo',
-            'NoSweatGG', 'HowYouLoseThat', 'MustBeLagging', 'Built Different',
-            'WasEatingBTW', 'PhoneInOtherHand', 'WatchingNetflix',
-            'TabbledOut', 'MyDogPlayingRN', 'AutoPilotMode',
-            'CantBelieveYouTried', 'NoCompetition', 'FreeLobby',
-            'WhereTheSkilled1s', 'ThisTheMainEvent?', 'DefinitelyNotTrying',
-            'CanILeaveYet', 'ThatsAllYouGot?', 'ExpectedMore',
-            'BackToTheMenu', 'NextVictimPls', 'SpeedrunningLife',
-            'ClickClickWin', 'WhyYouMad?', 'SomeoneSalty?', 'StayMadKid',
-            'CryAboutIt', 'CopeHarder', 'Malding', 'BigMad',
-            'ActuallyEZ', 'NotEvenClose', 'DominatedLOL', 'Stomped',
-            'DestroyedYou', 'ClappedCheeks', 'GetRekt', 'Demolished',
-            'Bodied', 'Destroyed', 'Annihilated', 'Wrecked',
-            'RanThrough', 'DiffedHard', 'GapIsHuge', 'MilesAhead',
-            'NotMyLevel', 'OutOfYourLeague', 'DifferentTier', 'SmurfingUnranked',
-            'HowYouThisBad', 'UseTutorial', 'PracticeVsBots', 'WatchAGuide',
-            'LearnTheGame', 'StopEmbarrassing', 'DeleteTheGame', 'TryAnotherGame'
-        ];
-        state.displayUsername = toxicNames[Math.floor(Math.random() * toxicNames.length)];
-    } else {
-        state.displayUsername = displayName;
-    }
 }
 
 function startSoloGame(gameMode = 'standard') {
@@ -740,6 +823,7 @@ function startSoloGame(gameMode = 'standard') {
 
     resetGame();
     updateTurnIndicator(); // Show turn indicator for special modes
+    updateClearButtonText(); // Update button text based on username
     loadLeaderboard(); // Load leaderboard for this game mode
 }
 
@@ -757,7 +841,6 @@ function connectToServer() {
     // BUG #36, #44 FIXES: Prevent duplicate connections and clean up old socket
     if (state.socket) {
         if (state.socket.connected) {
-            console.log('Already connected to server');
             return;
         }
         // Disconnect old socket before creating new one
@@ -772,7 +855,6 @@ function connectToServer() {
     state.socket = io(SERVER_URL);
 
     state.socket.on('connect', () => {
-        console.log('Connected to server');
         const statusEl = document.getElementById('connection-status');
         if (statusEl) statusEl.textContent = '✅ Connected to server';
         const createBtn = document.getElementById('create-room-btn');
@@ -782,7 +864,6 @@ function connectToServer() {
     });
 
     state.socket.on('disconnect', () => {
-        console.log('Disconnected from server');
         const statusEl = document.getElementById('connection-status');
         if (statusEl) statusEl.textContent = '❌ Disconnected from server';
     });
@@ -848,8 +929,6 @@ function connectToServer() {
         }
 
         // Handle other players' actions
-        console.log(`Player ${data.username} performed action: ${data.action} at (${data.row}, ${data.col})`);
-
         // Validate row/col bounds before accessing board
         if (data.action === 'reveal' && data.row !== undefined && data.col !== undefined) {
             if (data.row < 0 || data.row >= state.difficulty.rows || data.col < 0 || data.col >= state.difficulty.cols) {
@@ -872,7 +951,6 @@ function connectToServer() {
 
                 // Place mines using the first player's click coordinates for consistent board
                 placeMines(data.row, data.col);
-                console.log('Mines placed from player_action at:', data.row, data.col);
             }
 
             // ONLY sync cell reveals in Russian Roulette (turn-based mode)
@@ -903,7 +981,6 @@ function connectToServer() {
     });
 
     state.socket.on('turn_changed', (data) => {
-        console.log('Turn changed:', { oldTurn: state.currentTurn, newTurn: data.current_turn, myUsername: state.displayUsername });
         state.currentTurn = data.current_turn;
         updateTurnIndicator();
         drawBoard(); // Redraw to show any visual changes
@@ -940,7 +1017,6 @@ function connectToServer() {
     });
 
     state.socket.on('player_eliminated', (data) => {
-        console.log('Player eliminated:', data.username);
         // Don't show result here - wait for game_ended event
         // This just notifies that a player died
         // The game_ended event will show the final results
@@ -948,7 +1024,6 @@ function connectToServer() {
 
     state.socket.on('error', (data) => {
         const message = data && data.message ? data.message : 'Unknown error occurred';
-        console.log('Server error:', message);
 
         // If on join screen, show error there
         if (state.currentScreen === 'join-screen') {
@@ -1003,8 +1078,6 @@ function joinRoom() {
     // Trim whitespace
     const roomCode = document.getElementById('room-code-input').value.trim();
 
-    console.log('Joining room with code:', roomCode);
-
     if (!roomCode || roomCode.length !== 6 || !/^\d{6}$/.test(roomCode)) {
         document.getElementById('join-error').textContent = 'Please enter a valid 6-digit room code';
         return;
@@ -1020,8 +1093,6 @@ function joinRoom() {
     // Clear any error messages and show loading state
     document.getElementById('join-error').textContent = 'Joining room...';
     document.getElementById('join-error').style.color = '#667eea';
-
-    console.log('Emitting join_room event:', { room_code: roomCode, username: state.displayUsername });
 
     state.socket.emit('join_room', {
         room_code: roomCode,
@@ -1158,6 +1229,7 @@ function startMultiplayerGame(boardSeed) {
 
     resetGame();
     updateTurnIndicator();
+    updateClearButtonText(); // Update button text based on username
     loadGlobalLeaderboard(); // Load global leaderboard for this mode
 }
 
@@ -1308,7 +1380,8 @@ function resetGame() {
                 isMine: false,
                 isRevealed: false,
                 isFlagged: false,
-                adjacentMines: 0
+                adjacentMines: 0,
+                isCheatSurvived: false // CHEAT FIX: Track mines that were clicked but survived via ICantLose cheat
             };
         }
     }
@@ -1324,8 +1397,6 @@ function placeMines(excludeRow, excludeCol) {
         console.warn('Attempted to place mines twice! Blocked.');
         return;
     }
-
-    console.log('Placing mines with exclusion at:', excludeRow, excludeCol);
 
     let minesPlaced = 0;
     const excludeCells = new Set();
@@ -1344,6 +1415,15 @@ function placeMines(excludeRow, excludeCol) {
 
     // Use seeded random for multiplayer, Math.random for solo
     const getRandom = state.mode === 'multiplayer' && state.seededRandom ? state.seededRandom : Math.random;
+
+    // BUG #288 FIX: Prevent infinite loop if not enough cells available
+    const totalCells = state.difficulty.rows * state.difficulty.cols;
+    const availableCells = totalCells - excludeCells.size;
+    if (state.difficulty.mines > availableCells) {
+        console.error(`Cannot place ${state.difficulty.mines} mines in ${availableCells} available cells`);
+        // Cap mines to available cells
+        state.difficulty.mines = Math.max(1, availableCells - 1);
+    }
 
     while (minesPlaced < state.difficulty.mines) {
         const row = Math.floor(getRandom() * state.difficulty.rows);
@@ -1377,7 +1457,6 @@ function placeMines(excludeRow, excludeCol) {
 
     // CRITICAL: Mark mines as placed to prevent re-calling
     state.minesPlaced = true;
-    console.log('Mines placed successfully. Count:', state.difficulty.mines);
 }
 
 function revealCell(row, col, isUserClick = true) {
@@ -1389,10 +1468,8 @@ function revealCell(row, col, isUserClick = true) {
     // Check turn in Luck Mode
     if (state.mode === 'multiplayer' && state.gameMode === 'luck') {
         if (state.currentTurn !== state.displayUsername) {
-            console.log('Not your turn!', { currentTurn: state.currentTurn, displayUsername: state.displayUsername });
             return;
         }
-        console.log('Your turn - revealing cell', { row, col });
         // Immediately clear turn to prevent double-clicking before server response
         state.currentTurn = null;
         updateTurnIndicator();
@@ -1432,9 +1509,11 @@ function revealCell(row, col, isUserClick = true) {
         // CRITICAL FIX: ICantLose cheat WITHOUT modifying board state
         // Previous version recalculated adjacent mines, causing numbers to change mid-game!
         if (state.username.toLowerCase() === 'icantlose') {
+            // CHEAT FIX: Mark this mine as survived via cheat for purple highlighting
+            cell.isCheatSurvived = true;
+
             // SOLO MODE: Just skip death,  continue playing
             if (state.mode === 'solo') {
-                console.log('ICantLose cheat: Skipping death in solo mode');
                 // Don't mark as revealed (mine stays hidden)
                 cell.isRevealed = false; // Undo the reveal from line 1096
                 updateStats();
@@ -1442,7 +1521,6 @@ function revealCell(row, col, isUserClick = true) {
                 return; // Skip death, continue playing
             } else {
                 // MULTIPLAYER: Silent god mode - don't trigger elimination
-                console.log('ICantLose cheat: Silent god mode in multiplayer');
                 // Don't emit eliminated, don't show result, just return
                 cell.isRevealed = false; // Undo the reveal
                 updateStats();
@@ -1643,7 +1721,8 @@ function advanceSurvivalLevel() {
                 isMine: false,
                 isRevealed: false,
                 isFlagged: false,
-                adjacentMines: 0
+                adjacentMines: 0,
+                isCheatSurvived: false // CHEAT FIX: Reset cheat survived status for new level
             };
         }
     }
@@ -1681,6 +1760,102 @@ function calculateScore() {
             state.score = state.tilesClicked;
         }
     }
+}
+
+function handleClearButton() {
+    // Route to appropriate function based on username
+    if (state.username.toLowerCase() === 'icantlose') {
+        clearBoard(); // Cheat: instant win
+    } else {
+        clearAllFlags(); // Normal: clear flags
+    }
+}
+
+function updateClearButtonText() {
+    // Update button text based on username
+    const clearBtn = document.getElementById('clear-btn');
+    if (!clearBtn) return;
+
+    if (state.username.toLowerCase() === 'icantlose') {
+        clearBtn.textContent = 'Clear Board';
+        clearBtn.title = 'Cheat: Instantly clear all safe tiles';
+    } else {
+        clearBtn.textContent = 'Clear Flags';
+        clearBtn.title = 'Remove all flags from the board';
+    }
+}
+
+function clearBoard() {
+    // CHEAT: Instantly reveal all safe tiles for instant win (icantlose only)
+    if (state.username.toLowerCase() !== 'icantlose') {
+        console.warn('Clear Board cheat only available for icantlose username');
+        return;
+    }
+
+    // MULTIPLAYER: Disable cheat in multiplayer to avoid ruining game for others
+    if (state.mode === 'multiplayer') {
+        alert('Clear Board cheat is disabled in multiplayer mode!');
+        return;
+    }
+
+    if (state.gameOver || !state.minesPlaced || !state.board || state.board.length === 0) {
+        console.warn('Cannot clear board: game not ready or already over');
+        return;
+    }
+
+    console.log('🎮 CHEAT ACTIVATED: Clearing board...');
+
+    // Reveal all non-mine cells instantly
+    let cellsRevealed = 0;
+    for (let row = 0; row < state.difficulty.rows; row++) {
+        for (let col = 0; col < state.difficulty.cols; col++) {
+            const cell = state.board[row][col];
+            if (cell && !cell.isMine && !cell.isRevealed) {
+                cell.isRevealed = true;
+                state.tilesClicked++; // Count towards score
+                cellsRevealed++;
+            }
+        }
+    }
+
+    console.log(`✅ Revealed ${cellsRevealed} safe tiles instantly!`);
+
+    // Update display
+    updateStats();
+    drawBoard();
+
+    // Trigger win check (will advance level in survival or end game)
+    checkWin();
+}
+
+function clearAllFlags() {
+    // Clear all flags from the board
+    if (state.gameOver || !state.minesPlaced || !state.board || state.board.length === 0) {
+        console.warn('Cannot clear flags: board not ready or game over');
+        return;
+    }
+
+    // Count how many flags we're clearing
+    let flagsCleared = 0;
+
+    for (let row = 0; row < state.difficulty.rows; row++) {
+        for (let col = 0; col < state.difficulty.cols; col++) {
+            const cell = state.board[row][col];
+            if (cell && cell.isFlagged && !cell.isRevealed) {
+                cell.isFlagged = false;
+                flagsCleared++;
+            }
+        }
+    }
+
+    // Update the flags placed count
+    state.flagsPlaced = 0;
+
+    // Update display
+    updateStats();
+    drawBoard();
+
+    console.log(`Cleared ${flagsCleared} flags`);
 }
 
 function useHint() {
@@ -1730,8 +1905,15 @@ function useHint() {
     }
 }
 
+// RESPONSIVENESS FIX: Shared debouncing variables for both touch and click
+let lastDesktopClickTime = 0;
+let lastDesktopClickCell = null;
+const DESKTOP_CLICK_DEBOUNCE_MS = 50; // Prevent double-clicks within 50ms
+
 function handleCanvasClick(e) {
     if (state.gameOver) return;
+
+    const now = Date.now();
 
     const CANVAS_BORDER_WIDTH = 3;
     const rect = e.target.getBoundingClientRect();
@@ -1746,11 +1928,26 @@ function handleCanvasClick(e) {
         return;
     }
 
+    // RESPONSIVENESS FIX: Debouncing for desktop clicks - prevent rapid double-clicks
+    const cellKey = `${row},${col}`;
+    const timeSinceLastClick = now - lastDesktopClickTime;
+
+    // Global debounce - prevent any clicks too close together
+    if (timeSinceLastClick < DESKTOP_CLICK_DEBOUNCE_MS) {
+        return;
+    }
+
+    lastDesktopClickTime = now;
+    lastDesktopClickCell = cellKey;
+
     if (state.hintCell && state.hintCell.row === row && state.hintCell.col === col) {
         state.hintCell = null;
     }
 
-    revealCell(row, col);
+    // RESPONSIVENESS FIX: Use requestAnimationFrame for smoother updates
+    requestAnimationFrame(() => {
+        revealCell(row, col);
+    });
 }
 
 function handleCanvasRightClick(e) {
@@ -1815,6 +2012,14 @@ function drawBoard() {
                 }
             }
             ctx.fillRect(x, y, state.cellSize - 1, state.cellSize - 1);
+
+            // CHEAT FIX: Purple highlighting for mines survived via ICantLose cheat
+            if (cell.isCheatSurvived) {
+                ctx.fillStyle = '#9b59b6'; // Purple color
+                ctx.globalAlpha = 0.6; // Semi-transparent overlay
+                ctx.fillRect(x, y, state.cellSize - 1, state.cellSize - 1);
+                ctx.globalAlpha = 1.0; // Reset alpha for other drawings
+            }
 
             // Hint highlight
             if (state.hintCell && state.hintCell.row === row && state.hintCell.col === col) {
@@ -1904,6 +2109,12 @@ function updateLeaderboard() {
     const leaderboard = document.getElementById('leaderboard');
     leaderboard.innerHTML = '';
 
+    // BUG #285 FIX: Validate state.players is iterable before spreading
+    if (!state.players || !Array.isArray(state.players)) {
+        console.warn('Players array invalid in updateLeaderboard');
+        return;
+    }
+
     const sortedPlayers = [...state.players].sort((a, b) => b.score - a.score);
 
     sortedPlayers.forEach((player, index) => {
@@ -1969,7 +2180,7 @@ async function submitScoreToBackend(won, score) {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-                username: state.displayUsername,
+                username: state.username, // LEADERBOARD FIX: Use actual username, not masked displayUsername
                 score: score,
                 time: state.elapsedTime,
                 difficulty: state.gameMode, // Use gameMode as difficulty filter
@@ -1977,8 +2188,7 @@ async function submitScoreToBackend(won, score) {
                 won: won
             })
         });
-        const data = await response.json();
-        console.log('Score submitted to leaderboard:', data);
+        await response.json();
     } catch (error) {
         console.error('Failed to submit score to leaderboard:', error);
     }
@@ -2005,6 +2215,12 @@ async function loadGlobalLeaderboard() {
 function displayGlobalLeaderboard(scores) {
     const leaderboard = document.getElementById('leaderboard');
     leaderboard.innerHTML = '';
+
+    // BUG #286 FIX: Validate scores parameter is not null/undefined
+    if (!scores || !Array.isArray(scores)) {
+        leaderboard.innerHTML = '<p style="color: #666; text-align: center; padding: 20px;">Unable to load leaderboard.</p>';
+        return;
+    }
 
     if (scores.length === 0) {
         leaderboard.innerHTML = '<p style="color: #666; text-align: center; padding: 20px;">No scores yet. Be the first!</p>';
@@ -2035,8 +2251,12 @@ function toggleSound() {
     const btn = document.getElementById('mute-btn');
     btn.textContent = state.soundEnabled ? '🔊 Sound' : '🔇 Muted';
 
-    // Save preference to localStorage
-    localStorage.setItem('soundEnabled', state.soundEnabled);
+    // BUG #284 FIX: Wrap localStorage in try-catch (fails in private browsing mode)
+    try {
+        localStorage.setItem('soundEnabled', state.soundEnabled);
+    } catch (e) {
+        console.error('Failed to save sound preference:', e);
+    }
 }
 
 function playSound(soundType) {
@@ -2055,11 +2275,16 @@ function playSound(soundType) {
 
 // Load sound preference from localStorage on init
 document.addEventListener('DOMContentLoaded', () => {
-    const savedSound = localStorage.getItem('soundEnabled');
-    if (savedSound !== null) {
-        state.soundEnabled = savedSound === 'true';
-        const btn = document.getElementById('mute-btn');
-        if (btn) btn.textContent = state.soundEnabled ? '🔊 Sound' : '🔇 Muted';
+    // BUG #284 FIX: Wrap localStorage in try-catch (fails in private browsing mode)
+    try {
+        const savedSound = localStorage.getItem('soundEnabled');
+        if (savedSound !== null) {
+            state.soundEnabled = savedSound === 'true';
+            const btn = document.getElementById('mute-btn');
+            if (btn) btn.textContent = state.soundEnabled ? '🔊 Sound' : '🔇 Muted';
+        }
+    } catch (e) {
+        console.error('Failed to load sound preference:', e);
     }
 });
 
@@ -2099,59 +2324,8 @@ function quitGame() {
         leaveRoom();
         showScreen('lobby-screen');
     } else {
-        showScreen('mode-screen');
+        showScreen('username-screen');
     }
 }
 
-/**
- * Populate profile screen with user data
- */
-function populateProfile() {
-    // BUG #59 FIX: Validate all elements exist
-    const user = getCurrentUser && typeof getCurrentUser === 'function' ? getCurrentUser() : null;
-
-    if (!user) {
-        console.warn('Cannot populate profile: user not found or auth.js not loaded');
-        showScreen('login-screen');
-        return;
-    }
-
-    // Populate account info with null checks
-    const usernameEl = document.getElementById('profile-username');
-    const emailEl = document.getElementById('profile-email');
-
-    if (usernameEl) usernameEl.textContent = user.username || 'Unknown';
-    if (emailEl) emailEl.textContent = user.email || 'N/A';
-
-    // Show verification status
-    const verifiedEl = document.getElementById('profile-verified');
-    if (!verifiedEl) return; // Exit if element doesn't exist
-
-    if (user.is_verified) {
-        verifiedEl.textContent = '✓ Verified';
-        verifiedEl.style.color = '#2ecc71';
-        // Hide resend verification button
-        document.getElementById('resend-verification-btn').style.display = 'none';
-    } else {
-        verifiedEl.textContent = '⚠ Not Verified';
-        verifiedEl.style.color = '#f1c40f';
-        // Show resend verification button
-        document.getElementById('resend-verification-btn').style.display = 'block';
-    }
-
-    // Show member since date
-    const createdDate = user.created_at ? new Date(user.created_at).toLocaleDateString() : 'Unknown';
-    document.getElementById('profile-created').textContent = createdDate;
-
-    // Populate game statistics
-    document.getElementById('profile-games-played').textContent = user.total_games_played || 0;
-    document.getElementById('profile-wins').textContent = user.total_wins || 0;
-    document.getElementById('profile-losses').textContent = user.total_losses || 0;
-
-    // Calculate and display win rate
-    const winRate = user.win_rate || 0;
-    document.getElementById('profile-win-rate').textContent = winRate + '%';
-
-    // Show high score
-    document.getElementById('profile-high-score').textContent = user.highest_score || 0;
-}
+// Auth system removed - no profiles needed anymore!

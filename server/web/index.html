@@ -2,248 +2,26 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <!-- BUG #173, #180 FIX: Better viewport for mobile keyboards -->
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <!-- RESPONSIVENESS FIX: Better viewport - allow zoom for accessibility but prevent bounce -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=yes">
     <title>Minesweeper Multiplayer</title>
-    <!-- BUG #173 FIX: styles.css existence assumed -->
     <link rel="stylesheet" href="styles.css" onerror="console.error('Failed to load styles.css')">
 </head>
 <body>
     <div id="app">
-        <!-- Login Screen -->
-        <div id="login-screen" class="screen active">
-            <div class="container auth-container">
-                <h1>🎮 MINESWEEPER MULTIPLAYER 🎮</h1>
-                <div class="auth-form">
-                    <h2>Login</h2>
-                    <form id="login-form" onsubmit="handleLoginSubmit(event)">
-                        <div class="form-group">
-                            <label for="login-username">Username or Email</label>
-                            <input type="text" id="login-username" placeholder="Enter username or email" required autofocus>
-                        </div>
-                        <div class="form-group">
-                            <label for="login-password">Password</label>
-                            <input type="password" id="login-password" placeholder="Enter password" required>
-                        </div>
-                        <div class="form-group checkbox-group">
-                            <input type="checkbox" id="login-remember">
-                            <label for="login-remember">Remember me (30 days)</label>
-                        </div>
-                        <div id="login-error" class="error-message"></div>
-                        <button type="submit" class="btn btn-primary btn-block">Login</button>
-                    </form>
-                    <div class="auth-links">
-                        <a href="#" onclick="showScreen('register-screen'); return false;">Create Account</a>
-                        <a href="#" onclick="showScreen('forgot-password-screen'); return false;">Forgot Password?</a>
-                    </div>
-                    <div class="guest-divider">
-                        <span>OR</span>
-                    </div>
-                    <button onclick="continueAsGuest()" class="btn btn-secondary btn-block">Continue as Guest</button>
-                </div>
-            </div>
-        </div>
-
-        <!-- Registration Screen -->
-        <div id="register-screen" class="screen">
-            <div class="container auth-container">
-                <h1>🎮 MINESWEEPER MULTIPLAYER 🎮</h1>
-                <div class="auth-form">
-                    <h2>Create Account</h2>
-                    <form id="register-form" onsubmit="handleRegisterSubmit(event)">
-                        <div class="form-group">
-                            <label for="register-username">Username</label>
-                            <!-- BUG #175 FIX: Pattern matches server-side USERNAME_REGEX -->
-                            <input type="text" id="register-username" placeholder="Choose a username (3-20 chars)"
-                                   minlength="3" maxlength="20" pattern="^[a-zA-Z0-9_]{3,20}$" required autofocus>
-                            <small>Letters, numbers, and underscores only</small>
-                        </div>
-                        <div class="form-group">
-                            <label for="register-email">Email</label>
-                            <input type="email" id="register-email" placeholder="Enter your email" required>
-                            <small>Your account will be ready immediately</small>
-                        </div>
-                        <div class="form-group">
-                            <label for="register-password">Password</label>
-                            <input type="password" id="register-password" placeholder="Create a password"
-                                   minlength="8" required>
-                            <!-- BUG #176 FIX: Accurate password requirements -->
-                            <small>At least 8 characters, with uppercase, lowercase, and number</small>
-                        </div>
-                        <div class="form-group">
-                            <label for="register-password-confirm">Confirm Password</label>
-                            <input type="password" id="register-password-confirm" placeholder="Confirm your password"
-                                   minlength="8" required>
-                            <small>Re-enter your password to confirm</small>
-                        </div>
-                        <div id="register-error" class="error-message"></div>
-                        <div id="register-success" class="success-message"></div>
-                        <button type="submit" class="btn btn-primary btn-block">Create Account</button>
-                    </form>
-                    <div class="auth-links">
-                        <a href="#" onclick="showScreen('login-screen'); return false;">Already have an account? Login</a>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <!-- Forgot Password Screen -->
-        <div id="forgot-password-screen" class="screen">
-            <div class="container auth-container">
-                <h1>🔐 Reset Password</h1>
-                <div class="auth-form">
-                    <h2>Forgot Your Password?</h2>
-                    <p>Enter your email address and we'll send you a link to reset your password.</p>
-                    <form id="forgot-password-form" onsubmit="handleForgotPasswordSubmit(event)">
-                        <div class="form-group">
-                            <label for="forgot-email">Email Address</label>
-                            <input type="email" id="forgot-email" placeholder="Enter your email" required autofocus>
-                        </div>
-                        <div id="forgot-error" class="error-message"></div>
-                        <div id="forgot-success" class="success-message"></div>
-                        <button type="submit" class="btn btn-primary btn-block">Send Reset Link</button>
-                    </form>
-                    <div class="auth-links">
-                        <a href="#" onclick="showScreen('login-screen'); return false;">Back to Login</a>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <!-- Reset Password Screen -->
-        <div id="reset-password-screen" class="screen">
-            <div class="container auth-container">
-                <h1>🔐 Reset Password</h1>
-                <div class="auth-form">
-                    <h2>Enter New Password</h2>
-                    <form id="reset-password-form" onsubmit="handleResetPasswordSubmit(event)">
-                        <div class="form-group">
-                            <label for="reset-password">New Password</label>
-                            <input type="password" id="reset-password" placeholder="Enter new password"
-                                   minlength="8" required autofocus>
-                            <small>At least 8 characters, with uppercase, lowercase, and number</small>
-                        </div>
-                        <div class="form-group">
-                            <label for="reset-password-confirm">Confirm Password</label>
-                            <input type="password" id="reset-password-confirm" placeholder="Confirm new password"
-                                   minlength="8" required>
-                        </div>
-                        <div id="reset-error" class="error-message"></div>
-                        <div id="reset-success" class="success-message"></div>
-                        <button type="submit" class="btn btn-primary btn-block">Reset Password</button>
-                    </form>
-                </div>
-            </div>
-        </div>
-
-        <!-- Email Verification Screen -->
-        <div id="verification-screen" class="screen">
-            <div class="container auth-container">
-                <h1>📧 Email Verification</h1>
-                <div class="auth-form">
-                    <div id="verification-message" class="info-message">Verifying your email...</div>
-                </div>
-            </div>
-        </div>
-
-        <!-- Profile Screen -->
-        <div id="profile-screen" class="screen">
-            <div class="container">
-                <h1>👤 Your Profile</h1>
-                <div class="profile-content">
-                    <div class="profile-section">
-                        <h3>Account Information</h3>
-                        <div class="profile-field">
-                            <label>Username:</label>
-                            <span id="profile-username" class="username-display"></span>
-                        </div>
-                        <div class="profile-field">
-                            <label>Email:</label>
-                            <span id="profile-email"></span>
-                        </div>
-                        <div class="profile-field">
-                            <label>Status:</label>
-                            <span id="profile-verified" class="verification-notice"></span>
-                        </div>
-                        <div class="profile-field">
-                            <label>Member Since:</label>
-                            <span id="profile-created"></span>
-                        </div>
-                    </div>
-
-                    <div class="profile-section">
-                        <h3>Game Statistics</h3>
-                        <div class="stats-grid">
-                            <div class="stat-card">
-                                <div class="stat-value" id="profile-games-played">0</div>
-                                <div class="stat-label">Games Played</div>
-                            </div>
-                            <div class="stat-card">
-                                <div class="stat-value" id="profile-wins">0</div>
-                                <div class="stat-label">Wins</div>
-                            </div>
-                            <div class="stat-card">
-                                <div class="stat-value" id="profile-losses">0</div>
-                                <div class="stat-label">Losses</div>
-                            </div>
-                            <div class="stat-card">
-                                <div class="stat-value" id="profile-win-rate">0%</div>
-                                <div class="stat-label">Win Rate</div>
-                            </div>
-                            <div class="stat-card">
-                                <div class="stat-value" id="profile-high-score">0</div>
-                                <div class="stat-label">High Score</div>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div class="profile-actions">
-                        <button id="resend-verification-btn" class="btn btn-primary" onclick="resendVerificationEmail()" style="display: none;">
-                            Resend Verification Email
-                        </button>
-                        <button onclick="logout()" class="btn btn-secondary">Logout</button>
-                        <button onclick="showScreen('main-screen')" class="btn btn-secondary">Back to Game</button>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <!-- Display Name Screen -->
-        <div id="display-name-screen" class="screen">
-            <div class="container auth-container">
-                <h1>🎮 MINESWEEPER MULTIPLAYER 🎮</h1>
-                <div class="auth-form">
-                    <h2>Choose Your Display Name</h2>
-                    <p>This is the name other players will see in-game</p>
-                    <form id="display-name-form" onsubmit="handleDisplayNameSubmit(event)">
-                        <div class="form-group">
-                            <label for="display-name-input">Display Name</label>
-                            <input type="text" id="display-name-input" placeholder="Enter display name (3-20 chars)"
-                                   minlength="3" maxlength="20" required autofocus>
-                            <small>3-20 characters. Use anything you like!</small>
-                        </div>
-                        <div id="display-name-error" class="error-message"></div>
-                        <button type="submit" class="btn btn-primary btn-block">Continue</button>
-                    </form>
-                </div>
-            </div>
-        </div>
-
-        <!-- Main Screen (formerly Username Entry) -->
-        <div id="main-screen" class="screen">
+        <!-- Username Entry Screen -->
+        <div id="username-screen" class="screen active">
             <div class="container">
                 <h1>🎮 MINESWEEPER MULTIPLAYER 🎮</h1>
-                <div class="welcome-message">
-                    <h2>Welcome, <span class="username-display"></span>!</h2>
-                    <div class="verification-notice"></div>
-                    <div class="guest-notice"></div>
+                <div class="form-group">
+                    <input type="text" id="username-input" placeholder="Enter your username"
+                           minlength="1" maxlength="20" autofocus>
+                    <button id="username-submit" class="btn btn-primary">Start Playing</button>
                 </div>
-                <div class="main-menu">
-                    <button onclick="showScreen('mode-screen')" class="btn btn-large btn-primary">Play Now</button>
-                    <button onclick="showScreen('profile-screen')" class="btn btn-large login-required">My Profile</button>
-                    <button onclick="logout()" class="btn btn-large btn-secondary logout-button">Logout</button>
-                    <button onclick="showScreen('login-screen')" class="btn btn-large btn-secondary login-required" style="display: none;">Login / Sign Up</button>
-                </div>
+                <p style="margin-top: 20px; font-size: 0.9em; opacity: 0.8;">
+                    💡 Tips: Try "icantlose" for god mode! 😏<br>
+                    "random" for humble names, "random1" for epic combos!
+                </p>
             </div>
         </div>
 
@@ -255,7 +33,7 @@
                     <button id="solo-btn" class="btn btn-large">Solo</button>
                     <button id="multiplayer-btn" class="btn btn-large">Multiplayer</button>
                 </div>
-                <button id="back-to-main" class="btn btn-secondary">Back</button>
+                <button id="back-to-username" class="btn btn-secondary">Change Username</button>
             </div>
         </div>
 
@@ -277,7 +55,6 @@
             <div class="container">
                 <h1>Join Room</h1>
                 <div class="form-group">
-                    <!-- BUG #177 FIX: Pattern for digits only -->
                     <input type="text" id="room-code-input" placeholder="Enter 6-digit room code"
                            maxlength="6" pattern="[0-9]{6}" inputmode="numeric">
                     <button id="join-submit" class="btn btn-primary">Join</button>
@@ -436,6 +213,7 @@
 
                         <div class="game-controls">
                             <button id="hint-btn" class="btn btn-small">Hint (H)</button>
+                            <button id="clear-btn" class="btn btn-small">Clear Flags</button>
                             <button id="new-game-btn" class="btn btn-small">New Game</button>
                             <button id="mute-btn" class="btn btn-small">🔊 Sound</button>
                             <button id="quit-btn" class="btn btn-small btn-secondary">Quit</button>
@@ -474,12 +252,10 @@
         </div>
     </div>
 
-    <!-- BUG #178-179 FIX: Add integrity and crossorigin for security -->
     <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"
             integrity="sha384-P9ibr4xiyx6xSZxF7YJQsEBdBs3EECEBEqNBhQiTNRhKGWQfgVBvU5TQdWHwlCHv"
             crossorigin="anonymous"
             onerror="console.error('Failed to load Socket.IO')"></script>
-    <script src="auth.js" onerror="console.error('Failed to load auth.js')"></script>
     <script src="game.js" onerror="console.error('Failed to load game.js')"></script>
 </body>
 </html>
