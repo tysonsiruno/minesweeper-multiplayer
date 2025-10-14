@@ -319,15 +319,20 @@ def reset_password():
 @token_required
 def logout(current_user):
     """Logout user"""
-    auth_header = request.headers.get('Authorization', '')
-    token = auth_header.split(' ')[1] if ' ' in auth_header else ''
+    try:
+        auth_header = request.headers.get('Authorization', '')
+        token = auth_header.split(' ')[1] if ' ' in auth_header else ''
 
-    # Invalidate current session
-    Session.query.filter_by(user_id=current_user.id).delete()
-    db.session.commit()
+        # Invalidate current session
+        Session.query.filter_by(user_id=current_user.id).delete()
+        db.session.commit()
 
-    SecurityAuditLog.log_action(current_user.id, 'logout', True, get_client_ip(), get_user_agent())
-    return jsonify({'success': True, 'message': 'Logged out successfully'})
+        SecurityAuditLog.log_action(current_user.id, 'logout', True, get_client_ip(), get_user_agent())
+        return jsonify({'success': True, 'message': 'Logged out successfully'})
+    except Exception as e:
+        db.session.rollback()
+        print(f'Logout error: {e}')
+        return jsonify({'success': False, 'message': 'Logout failed. Please try again.'}), 500
 
 @app.route('/api/auth/me', methods=['GET'])
 @token_required
@@ -355,19 +360,24 @@ def refresh_token():
     if not user or user.account_status != 'active':
         return jsonify({'success': False, 'message': 'User not found or inactive'}), 401
 
-    # Generate new access token
-    access_token = generate_access_token(user.id, user.username, user.is_verified)
+    try:
+        # Generate new access token
+        access_token = generate_access_token(user.id, user.username, user.is_verified)
 
-    # Optionally rotate refresh token for better security
-    new_refresh_token = secrets.token_urlsafe(32)
-    session.refresh_token = new_refresh_token
-    db.session.commit()
+        # Optionally rotate refresh token for better security
+        new_refresh_token = secrets.token_urlsafe(32)
+        session.refresh_token = new_refresh_token
+        db.session.commit()
 
-    return jsonify({
-        'success': True,
-        'access_token': access_token,
-        'refresh_token': new_refresh_token
-    })
+        return jsonify({
+            'success': True,
+            'access_token': access_token,
+            'refresh_token': new_refresh_token
+        })
+    except Exception as e:
+        db.session.rollback()
+        print(f'Token refresh error: {e}')
+        return jsonify({'success': False, 'message': 'Token refresh failed. Please try again.'}), 500
 
 @app.route('/api/auth/resend-verification', methods=['POST'])
 @token_required
@@ -533,10 +543,24 @@ def handle_disconnect():
 @socketio.on('create_room')
 def handle_create_room(data):
     """Create a new game room"""
-    username = data.get("username", "Player")
-    difficulty = data.get("difficulty", "Medium")
-    max_players = data.get("max_players", 3)
-    game_mode = data.get("game_mode", "standard")
+    if not data:
+        emit('error', {"message": "Invalid data"})
+        return
+
+    # Sanitize and validate inputs
+    username = sanitize_input(data.get("username", "Player"), 50)
+    difficulty = sanitize_input(data.get("difficulty", "Medium"), 20)
+    game_mode = sanitize_input(data.get("game_mode", "standard"), 20)
+
+    # Validate max_players
+    try:
+        max_players = int(data.get("max_players", 3))
+        if max_players < 2 or max_players > 10:
+            emit('error', {"message": "Max players must be between 2 and 10"})
+            return
+    except (ValueError, TypeError):
+        emit('error', {"message": "Invalid max players value"})
+        return
 
     room_code = generate_room_code()
 
@@ -579,8 +603,21 @@ def handle_create_room(data):
 @socketio.on('join_room')
 def handle_join_room(data):
     """Join an existing game room"""
-    room_code = data.get("room_code", "").upper()
-    username = data.get("username", "Player")
+    if not data:
+        emit('error', {"message": "Invalid data"})
+        return
+
+    # Validate and sanitize room code
+    room_code = str(data.get("room_code", "")).upper().strip()
+    if not room_code or len(room_code) != 6:
+        emit('error', {"message": "Invalid room code format"})
+        return
+
+    # Sanitize username
+    username = sanitize_input(data.get("username", "Player"), 50)
+    if not username:
+        emit('error', {"message": "Username required"})
+        return
 
     if room_code not in game_rooms:
         emit('error', {"message": "Room not found"})
@@ -635,8 +672,13 @@ def handle_leave_room():
     if request.sid not in player_sessions:
         return
 
-    session = player_sessions[request.sid]
-    room_code = session["room_code"]
+    session = player_sessions.get(request.sid)
+    if not session:
+        return
+
+    room_code = session.get("room_code")
+    if not room_code:
+        return
 
     if room_code in game_rooms:
         room = game_rooms[room_code]
@@ -655,7 +697,9 @@ def handle_leave_room():
         if len(room["players"]) == 0:
             del game_rooms[room_code]
 
-    del player_sessions[request.sid]
+    # Safely remove from player_sessions
+    if request.sid in player_sessions:
+        del player_sessions[request.sid]
 
 @socketio.on('player_ready')
 def handle_player_ready(data):
@@ -700,6 +744,9 @@ def handle_player_ready(data):
 @socketio.on('game_action')
 def handle_game_action(data):
     """Handle game actions (cell reveal, flag)"""
+    if not data:
+        return
+
     if request.sid not in player_sessions:
         return
 
@@ -711,6 +758,27 @@ def handle_game_action(data):
 
     room = game_rooms[room_code]
     action = data.get("action")
+
+    # Validate action type
+    valid_actions = ["reveal", "flag", "eliminated"]
+    if action not in valid_actions:
+        return
+
+    # Validate row and col if provided
+    if action in ["reveal", "flag"]:
+        try:
+            row = data.get("row")
+            col = data.get("col")
+            if row is not None:
+                row = int(row)
+                if row < 0 or row > 100:  # Reasonable max board size
+                    return
+            if col is not None:
+                col = int(col)
+                if col < 0 or col > 100:  # Reasonable max board size
+                    return
+        except (ValueError, TypeError):
+            return
 
     # Handle elimination in Luck Mode
     if action == "eliminated" and room["game_mode"] == "luck":
@@ -780,6 +848,9 @@ def handle_game_action(data):
 @socketio.on('game_finished')
 def handle_game_finished(data):
     """Handle player finishing game"""
+    if not data:
+        return
+
     if request.sid not in player_sessions:
         return
 
@@ -791,11 +862,22 @@ def handle_game_finished(data):
 
     room = game_rooms[room_code]
 
+    # Validate score and time
+    try:
+        score = int(data.get("score", 0))
+        time = int(data.get("time", 0))
+        if score < 0 or time < 0:
+            score, time = 0, 0
+        if score > 10000 or time > 86400:  # Reasonable max values
+            score, time = min(score, 10000), min(time, 86400)
+    except (ValueError, TypeError):
+        score, time = 0, 0
+
     # Update player score
     for player in room["players"]:
         if player["session_id"] == request.sid:
-            player["score"] = data.get("score", 0)
-            player["time"] = data.get("time", 0)
+            player["score"] = score
+            player["time"] = time
             player["finished"] = True
             break
 
