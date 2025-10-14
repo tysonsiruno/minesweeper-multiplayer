@@ -204,6 +204,27 @@
             </div>
         </div>
 
+        <!-- Display Name Screen -->
+        <div id="display-name-screen" class="screen">
+            <div class="container auth-container">
+                <h1>🎮 MINESWEEPER MULTIPLAYER 🎮</h1>
+                <div class="auth-form">
+                    <h2>Choose Your Display Name</h2>
+                    <p>This is the name other players will see in-game</p>
+                    <form id="display-name-form" onsubmit="handleDisplayNameSubmit(event)">
+                        <div class="form-group">
+                            <label for="display-name-input">Display Name</label>
+                            <input type="text" id="display-name-input" placeholder="Enter display name (3-20 chars)"
+                                   minlength="3" maxlength="20" required autofocus>
+                            <small>3-20 characters. Use anything you like!</small>
+                        </div>
+                        <div id="display-name-error" class="error-message"></div>
+                        <button type="submit" class="btn btn-primary btn-block">Continue</button>
+                    </form>
+                </div>
+            </div>
+        </div>
+
         <!-- Main Screen (formerly Username Entry) -->
         <div id="main-screen" class="screen">
             <div class="container">

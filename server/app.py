@@ -77,9 +77,9 @@ game_rooms = {}  # {room_code: {host, players, difficulty, status, board_seed}}
 player_sessions = {}  # {session_id: {username, room_code}}
 
 def generate_room_code():
-    """Generate a unique 6-character room code"""
+    """Generate a unique 6-digit numeric room code"""
     while True:
-        code = secrets.token_hex(3).upper()
+        code = str(secrets.randbelow(1000000)).zfill(6)
         if code not in game_rooms:
             return code
 
@@ -617,9 +617,9 @@ def handle_join_room(data):
         return
 
     # Validate and sanitize room code
-    room_code = str(data.get("room_code", "")).upper().strip()
-    if not room_code or len(room_code) != 6:
-        emit('error', {"message": "Invalid room code format"})
+    room_code = str(data.get("room_code", "")).strip()
+    if not room_code or len(room_code) != 6 or not room_code.isdigit():
+        emit('error', {"message": "Invalid room code format - must be 6 digits"})
         return
 
     # Sanitize username

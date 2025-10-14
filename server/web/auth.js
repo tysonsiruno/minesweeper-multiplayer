@@ -15,7 +15,8 @@ const AuthState = {
     refreshToken: null,
     isGuest: false,
     isAuthenticated: false,
-    isVerified: false
+    isVerified: false,
+    displayName: null
 };
 
 /**
@@ -336,8 +337,8 @@ async function login(usernameOrEmail, password, rememberMe = false, retryCount =
             // Update UI
             updateUIForAuthState();
 
-            // Show main game screen
-            showScreen('main-screen');
+            // Show display name screen
+            showScreen('display-name-screen');
 
             return true;
         } else {
@@ -415,8 +416,8 @@ function continueAsGuest() {
     // Update UI
     updateUIForAuthState();
 
-    // Show main game screen
-    showScreen('main-screen');
+    // Show display name screen
+    showScreen('display-name-screen');
 }
 
 // ============================================================================
@@ -781,6 +782,43 @@ function handleResetPasswordSubmit(e) {
     }
 
     resetPassword(window.resetToken, password);
+}
+
+/**
+ * Handle display name form submission
+ */
+function handleDisplayNameSubmit(e) {
+    e.preventDefault();
+
+    const displayName = document.getElementById('display-name-input').value.trim();
+    const errorEl = document.getElementById('display-name-error');
+
+    // Clear previous errors
+    if (errorEl) errorEl.textContent = '';
+
+    // Validation
+    if (!displayName || displayName.length < 3) {
+        if (errorEl) {
+            errorEl.textContent = 'Display name must be at least 3 characters';
+            errorEl.style.display = 'block';
+        }
+        return;
+    }
+
+    if (displayName.length > 20) {
+        if (errorEl) {
+            errorEl.textContent = 'Display name must be at most 20 characters';
+            errorEl.style.display = 'block';
+        }
+        return;
+    }
+
+    // Store display name
+    AuthState.displayName = displayName;
+    localStorage.setItem('display_name', displayName);
+
+    // Navigate to main screen
+    showScreen('main-screen');
 }
 
 // ============================================================================
