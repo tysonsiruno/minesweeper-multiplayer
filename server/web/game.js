@@ -118,51 +118,75 @@ function setupEventListeners() {
     });
     document.getElementById('back-to-lobby').addEventListener('click', () => showScreen('lobby-screen'));
 
-    // Game mode selection
-    document.querySelectorAll('.select-mode').forEach(btn => {
-        btn.addEventListener('click', (e) => {
-            const mode = e.target.closest('.mode-card').dataset.mode;
+    // Game mode selection - with mobile touch support
+    const handleModeSelection = (e) => {
+        if (e) e.preventDefault();
+        const mode = e.target.closest('.mode-card').dataset.mode;
+        console.log('Mode selected:', mode);
 
-            // Time Bomb mode needs difficulty selection first
-            if (mode === 'timebomb') {
-                showScreen('timebomb-difficulty-screen');
-                return;
-            }
-
-            // Check if we're in solo or multiplayer flow
-            if (state.socket && state.socket.connected) {
-                createRoom(mode);
-            } else {
-                startSoloGame(mode);
-            }
-        });
-    });
-    document.getElementById('back-to-lobby2').addEventListener('click', () => {
-        // Back to lobby if multiplayer, otherwise back to mode selection
-        if (state.socket && state.socket.connected) {
-            showScreen('lobby-screen');
-        } else {
-            showScreen('mode-screen');
+        // Time Bomb mode needs difficulty selection first
+        if (mode === 'timebomb') {
+            showScreen('timebomb-difficulty-screen');
+            return;
         }
+
+        // Check if we're in solo or multiplayer flow
+        if (state.socket && state.socket.connected) {
+            createRoom(mode);
+        } else {
+            startSoloGame(mode);
+        }
+    };
+
+    document.querySelectorAll('.select-mode').forEach(btn => {
+        btn.addEventListener('click', handleModeSelection);
+        btn.addEventListener('touchend', handleModeSelection);
     });
 
-    // Time Bomb difficulty selection
-    document.querySelectorAll('.select-difficulty').forEach(btn => {
-        btn.addEventListener('click', (e) => {
-            const difficulty = e.target.closest('.mode-card').dataset.difficulty;
-            state.timebombDifficulty = difficulty;
-
-            // Check if we're in solo or multiplayer flow
+    const backToLobby2Btn = document.getElementById('back-to-lobby2');
+    if (backToLobby2Btn) {
+        const handleBackToLobby2 = (e) => {
+            if (e) e.preventDefault();
+            // Back to lobby if multiplayer, otherwise back to mode selection
             if (state.socket && state.socket.connected) {
-                createRoom('timebomb');
+                showScreen('lobby-screen');
             } else {
-                startSoloGame('timebomb');
+                showScreen('mode-screen');
             }
-        });
+        };
+        backToLobby2Btn.addEventListener('click', handleBackToLobby2);
+        backToLobby2Btn.addEventListener('touchend', handleBackToLobby2);
+    }
+
+    // Time Bomb difficulty selection - with mobile touch support
+    const handleDifficultySelection = (e) => {
+        if (e) e.preventDefault();
+        const difficulty = e.target.closest('.mode-card').dataset.difficulty;
+        state.timebombDifficulty = difficulty;
+        console.log('Difficulty selected:', difficulty);
+
+        // Check if we're in solo or multiplayer flow
+        if (state.socket && state.socket.connected) {
+            createRoom('timebomb');
+        } else {
+            startSoloGame('timebomb');
+        }
+    };
+
+    document.querySelectorAll('.select-difficulty').forEach(btn => {
+        btn.addEventListener('click', handleDifficultySelection);
+        btn.addEventListener('touchend', handleDifficultySelection);
     });
-    document.getElementById('back-to-gamemode').addEventListener('click', () => {
-        showScreen('gamemode-screen');
-    });
+
+    const backToGamemodeBtn = document.getElementById('back-to-gamemode');
+    if (backToGamemodeBtn) {
+        const handleBackToGamemode = (e) => {
+            if (e) e.preventDefault();
+            showScreen('gamemode-screen');
+        };
+        backToGamemodeBtn.addEventListener('click', handleBackToGamemode);
+        backToGamemodeBtn.addEventListener('touchend', handleBackToGamemode);
+    }
 
     // Waiting room
     document.getElementById('ready-btn').addEventListener('click', markReady);
