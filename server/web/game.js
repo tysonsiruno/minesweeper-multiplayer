@@ -7,7 +7,7 @@ const state = {
     displayUsername: '', // Display name (masked for ICantLose cheat)
     mode: 'solo', // 'solo' or 'multiplayer'
     gameMode: 'standard', // 'standard', 'luck', 'timebomb', 'survival'
-    currentScreen: 'username-screen',
+    currentScreen: 'login-screen',
     socket: null,
     roomCode: null,
     players: [],
@@ -62,16 +62,10 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 function setupEventListeners() {
-    // Username screen
-    document.getElementById('username-submit').addEventListener('click', submitUsername);
-    document.getElementById('username-input').addEventListener('keypress', (e) => {
-        if (e.key === 'Enter') submitUsername();
-    });
-
     // Mode selection
     document.getElementById('solo-btn').addEventListener('click', () => showScreen('gamemode-screen'));
     document.getElementById('multiplayer-btn').addEventListener('click', () => showMultiplayerLobby());
-    document.getElementById('back-to-username').addEventListener('click', () => showScreen('username-screen'));
+    document.getElementById('back-to-main').addEventListener('click', () => showScreen('main-screen'));
 
     // Lobby
     document.getElementById('create-room-btn').addEventListener('click', () => showScreen('gamemode-screen'));
@@ -253,16 +247,25 @@ function showScreen(screenId) {
     document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
     document.getElementById(screenId).classList.add('active');
     state.currentScreen = screenId;
+
+    // Initialize username when entering main screen
+    if (screenId === 'main-screen') {
+        initializeUsername();
+    }
+
+    // Populate profile data when entering profile screen
+    if (screenId === 'profile-screen') {
+        populateProfile();
+    }
 }
 
-function submitUsername() {
-    const input = document.getElementById('username-input');
-    const username = input.value.trim();
-
-    if (!username) {
-        alert('Please enter a username');
-        return;
-    }
+/**
+ * Initialize username from authentication state
+ * Called when user enters main screen after login/guest mode
+ */
+function initializeUsername() {
+    // Get username from auth.js
+    const username = getCurrentUsername();
 
     state.username = username;
 
@@ -306,8 +309,6 @@ function submitUsername() {
     } else {
         state.displayUsername = username;
     }
-
-    showScreen('mode-screen');
 }
 
 function startSoloGame(gameMode = 'standard') {
@@ -1371,4 +1372,50 @@ function quitGame() {
     } else {
         showScreen('mode-screen');
     }
+}
+
+/**
+ * Populate profile screen with user data
+ */
+function populateProfile() {
+    const user = getCurrentUser();
+
+    if (!user) {
+        showScreen('login-screen');
+        return;
+    }
+
+    // Populate account info
+    document.getElementById('profile-username').textContent = user.username;
+    document.getElementById('profile-email').textContent = user.email || 'N/A';
+
+    // Show verification status
+    const verifiedEl = document.getElementById('profile-verified');
+    if (user.is_verified) {
+        verifiedEl.textContent = '✓ Verified';
+        verifiedEl.style.color = '#2ecc71';
+        // Hide resend verification button
+        document.getElementById('resend-verification-btn').style.display = 'none';
+    } else {
+        verifiedEl.textContent = '⚠ Not Verified';
+        verifiedEl.style.color = '#f1c40f';
+        // Show resend verification button
+        document.getElementById('resend-verification-btn').style.display = 'block';
+    }
+
+    // Show member since date
+    const createdDate = user.created_at ? new Date(user.created_at).toLocaleDateString() : 'Unknown';
+    document.getElementById('profile-created').textContent = createdDate;
+
+    // Populate game statistics
+    document.getElementById('profile-games-played').textContent = user.total_games_played || 0;
+    document.getElementById('profile-wins').textContent = user.total_wins || 0;
+    document.getElementById('profile-losses').textContent = user.total_losses || 0;
+
+    // Calculate and display win rate
+    const winRate = user.win_rate || 0;
+    document.getElementById('profile-win-rate').textContent = winRate + '%';
+
+    // Show high score
+    document.getElementById('profile-high-score').textContent = user.highest_score || 0;
 }

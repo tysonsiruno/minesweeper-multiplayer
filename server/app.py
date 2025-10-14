@@ -8,22 +8,73 @@ import secrets
 from flask import Flask, jsonify, request, send_from_directory
 from flask_socketio import SocketIO, emit, join_room, leave_room, rooms
 from flask_cors import CORS
-from datetime import datetime
+from flask_limiter import Limiter
+from flask_limiter.util import get_remote_address
+from datetime import datetime, timedelta
 import json
+from dotenv import load_dotenv
+
+# Load environment variables
+load_dotenv()
 
 # Get paths
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 WEB_DIR = os.path.join(BASE_DIR, 'web')
 
+# Initialize Flask app
 app = Flask(__name__, static_folder=WEB_DIR, static_url_path='')
 app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', secrets.token_hex(16))
+
+# Database Configuration
+DATABASE_URL = os.environ.get('DATABASE_URL')
+if DATABASE_URL and DATABASE_URL.startswith('postgres://'):
+    DATABASE_URL = DATABASE_URL.replace('postgres://', 'postgresql://', 1)
+
+app.config['SQLALCHEMY_DATABASE_URI'] = DATABASE_URL or 'sqlite:///minesweeper.db'
+app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+app.config['SQLALCHEMY_ENGINE_OPTIONS'] = {
+    'pool_pre_ping': True,
+    'pool_recycle': 300,
+}
+
+# Initialize extensions
 CORS(app)
 socketio = SocketIO(app, cors_allowed_origins="*")
 
-# In-memory storage (will be replaced with PostgreSQL later)
+# Initialize rate limiter (requires Redis for production)
+limiter = Limiter(
+    app=app,
+    key_func=get_remote_address,
+    default_limits=["200 per day", "50 per hour"],
+    storage_uri=os.environ.get('REDIS_URL', 'memory://')
+)
+
+# Initialize database
+from models import db, User, Session, GameHistory, EmailVerificationToken, PasswordResetToken, SecurityAuditLog
+
+db.init_app(app)
+
+# Import authentication utilities
+from auth import (
+    hash_password, verify_password, validate_password, validate_username, validate_email,
+    generate_access_token, generate_refresh_token, decode_access_token, decode_refresh_token,
+    token_required, get_client_ip, get_user_agent, sanitize_input
+)
+
+# Import email service
+from email_service import (
+    send_verification_email, send_password_reset_email,
+    send_account_locked_email, send_welcome_email
+)
+
+# Create database tables
+with app.app_context():
+    db.create_all()
+    print("Database tables created successfully!")
+
+# In-memory storage for game rooms (multiplayer only)
 game_rooms = {}  # {room_code: {host, players, difficulty, status, board_seed}}
 player_sessions = {}  # {session_id: {username, room_code}}
-global_leaderboard = []
 
 def generate_room_code():
     """Generate a unique 6-character room code"""
@@ -31,6 +82,15 @@ def generate_room_code():
         code = secrets.token_hex(3).upper()
         if code not in game_rooms:
             return code
+
+# Security headers middleware
+@app.after_request
+def set_security_headers(response):
+    response.headers['X-Content-Type-Options'] = 'nosniff'
+    response.headers['X-Frame-Options'] = 'DENY'
+    response.headers['X-XSS-Protection'] = '1; mode=block'
+    response.headers['Strict-Transport-Security'] = 'max-age=31536000; includeSubDomains'
+    return response
 
 # Web Client Routes
 
@@ -51,6 +111,267 @@ def health_check():
     """Health check endpoint for Render"""
     return jsonify({"status": "healthy", "timestamp": datetime.now().isoformat()})
 
+# ============================================================================
+# AUTHENTICATION ENDPOINTS
+# ============================================================================
+
+@app.route('/api/auth/register', methods=['POST'])
+@limiter.limit("5 per hour")
+def register():
+    """User registration"""
+    data = request.json
+    username = sanitize_input(data.get('username', ''), 20)
+    email = sanitize_input(data.get('email', ''), 255).lower()
+    password = data.get('password', '')
+
+    # Validation
+    valid, msg = validate_username(username)
+    if not valid:
+        return jsonify({'success': False, 'message': msg}), 400
+
+    valid, msg = validate_email(email)
+    if not valid:
+        return jsonify({'success': False, 'message': msg}), 400
+
+    valid, msg = validate_password(password)
+    if not valid:
+        return jsonify({'success': False, 'message': msg}), 400
+
+    # Check if username or email already exists
+    if User.query.filter_by(username=username).first():
+        return jsonify({'success': False, 'message': 'Username already taken'}), 400
+    if User.query.filter_by(email=email).first():
+        return jsonify({'success': False, 'message': 'Email already registered'}), 400
+
+    # Create user
+    user = User(username=username, email=email, password_hash=hash_password(password))
+    db.session.add(user)
+    db.session.commit()
+
+    # Create verification token
+    token = EmailVerificationToken.generate_token()
+    verification = EmailVerificationToken(
+        user_id=user.id,
+        token=token,
+        expires_at=datetime.utcnow() + timedelta(hours=24)
+    )
+    db.session.add(verification)
+    db.session.commit()
+
+    # Send verification email
+    send_verification_email(email, username, token)
+
+    SecurityAuditLog.log_action(user.id, 'register', True, get_client_ip(), get_user_agent())
+
+    return jsonify({'success': True, 'message': 'Registration successful. Please check your email to verify your account.', 'user_id': user.id})
+
+@app.route('/api/auth/login', methods=['POST'])
+@limiter.limit("10 per 15 minutes")
+def login():
+    """User login"""
+    data = request.json
+    username_or_email = sanitize_input(data.get('username_or_email', ''), 255).lower()
+    password = data.get('password', '')
+    remember_me = data.get('remember_me', False)
+
+    # Find user by username or email
+    user = User.query.filter((User.username == username_or_email) | (User.email == username_or_email)).first()
+
+    if not user or not verify_password(password, user.password_hash):
+        if user:
+            user.failed_login_attempts += 1
+            if user.failed_login_attempts >= 5:
+                user.locked_until = datetime.utcnow() + timedelta(minutes=15)
+                send_account_locked_email(user.email, user.username, 15)
+            db.session.commit()
+        SecurityAuditLog.log_action(user.id if user else None, 'login', False, get_client_ip(), get_user_agent())
+        return jsonify({'success': False, 'message': 'Invalid credentials'}), 401
+
+    # Check if account is locked
+    if user.locked_until and user.locked_until > datetime.utcnow():
+        remaining = int((user.locked_until - datetime.utcnow()).total_seconds() / 60)
+        return jsonify({'success': False, 'message': f'Account locked. Try again in {remaining} minutes.'}), 403
+
+    # Reset failed attempts
+    user.failed_login_attempts = 0
+    user.last_login = datetime.utcnow()
+    db.session.commit()
+
+    # Generate tokens
+    access_token = generate_access_token(user.id, user.username, user.is_verified)
+    refresh_token_str = secrets.token_urlsafe(32)
+
+    session = Session(
+        user_id=user.id,
+        session_token=secrets.token_urlsafe(32),
+        refresh_token=refresh_token_str,
+        expires_at=datetime.utcnow() + (timedelta(days=30) if remember_me else timedelta(days=7)),
+        ip_address=get_client_ip(),
+        user_agent=get_user_agent()
+    )
+    db.session.add(session)
+    db.session.commit()
+
+    SecurityAuditLog.log_action(user.id, 'login', True, get_client_ip(), get_user_agent())
+
+    return jsonify({
+        'success': True,
+        'access_token': access_token,
+        'refresh_token': refresh_token_str,
+        'user': user.to_dict()
+    })
+
+@app.route('/api/auth/verify-email', methods=['GET'])
+def verify_email():
+    """Verify user email with token"""
+    token = request.args.get('token')
+    if not token:
+        return jsonify({'success': False, 'message': 'Token required'}), 400
+
+    verification = EmailVerificationToken.query.filter_by(token=token).first()
+    if not verification or verification.is_expired() or verification.is_used():
+        return jsonify({'success': False, 'message': 'Invalid or expired token'}), 400
+
+    user = User.query.get(verification.user_id)
+    user.is_verified = True
+    verification.used_at = datetime.utcnow()
+    db.session.commit()
+
+    send_welcome_email(user.email, user.username)
+    SecurityAuditLog.log_action(user.id, 'email_verified', True, get_client_ip(), get_user_agent())
+
+    return jsonify({'success': True, 'message': 'Email verified successfully!'})
+
+@app.route('/api/auth/forgot-password', methods=['POST'])
+@limiter.limit("3 per hour")
+def forgot_password():
+    """Request password reset"""
+    data = request.json
+    email = sanitize_input(data.get('email', ''), 255).lower()
+
+    user = User.query.filter_by(email=email).first()
+    if user:
+        token = PasswordResetToken.generate_token()
+        reset = PasswordResetToken(
+            user_id=user.id,
+            token=token,
+            expires_at=datetime.utcnow() + timedelta(hours=1),
+            ip_address=get_client_ip()
+        )
+        db.session.add(reset)
+        db.session.commit()
+        send_password_reset_email(email, user.username, token)
+
+    return jsonify({'success': True, 'message': 'If email exists, reset link has been sent'})
+
+@app.route('/api/auth/reset-password', methods=['POST'])
+def reset_password():
+    """Reset password with token"""
+    data = request.json
+    token = data.get('token')
+    new_password = data.get('new_password')
+
+    valid, msg = validate_password(new_password)
+    if not valid:
+        return jsonify({'success': False, 'message': msg}), 400
+
+    reset = PasswordResetToken.query.filter_by(token=token).first()
+    if not reset or reset.is_expired() or reset.is_used():
+        return jsonify({'success': False, 'message': 'Invalid or expired token'}), 400
+
+    user = User.query.get(reset.user_id)
+    user.password_hash = hash_password(new_password)
+    reset.used_at = datetime.utcnow()
+
+    # Invalidate all sessions
+    Session.query.filter_by(user_id=user.id).delete()
+    db.session.commit()
+
+    SecurityAuditLog.log_action(user.id, 'password_reset', True, get_client_ip(), get_user_agent())
+    return jsonify({'success': True, 'message': 'Password reset successfully'})
+
+@app.route('/api/auth/logout', methods=['POST'])
+@token_required
+def logout(current_user):
+    """Logout user"""
+    auth_header = request.headers.get('Authorization', '')
+    token = auth_header.split(' ')[1] if ' ' in auth_header else ''
+
+    # Invalidate current session
+    Session.query.filter_by(user_id=current_user.id).delete()
+    db.session.commit()
+
+    SecurityAuditLog.log_action(current_user.id, 'logout', True, get_client_ip(), get_user_agent())
+    return jsonify({'success': True, 'message': 'Logged out successfully'})
+
+@app.route('/api/auth/me', methods=['GET'])
+@token_required
+def get_current_user(current_user):
+    """Get current user info"""
+    return jsonify({'success': True, 'user': current_user.to_dict()})
+
+@app.route('/api/auth/refresh', methods=['POST'])
+def refresh_token():
+    """Refresh access token using refresh token"""
+    auth_header = request.headers.get('Authorization', '')
+    refresh_token_str = auth_header.split(' ')[1] if ' ' in auth_header else ''
+
+    if not refresh_token_str:
+        return jsonify({'success': False, 'message': 'Refresh token required'}), 401
+
+    # Find session with this refresh token
+    session = Session.query.filter_by(refresh_token=refresh_token_str, is_active=True).first()
+
+    if not session or session.is_expired():
+        return jsonify({'success': False, 'message': 'Invalid or expired refresh token'}), 401
+
+    # Get user
+    user = User.query.get(session.user_id)
+    if not user or user.account_status != 'active':
+        return jsonify({'success': False, 'message': 'User not found or inactive'}), 401
+
+    # Generate new access token
+    access_token = generate_access_token(user.id, user.username, user.is_verified)
+
+    # Optionally rotate refresh token for better security
+    new_refresh_token = secrets.token_urlsafe(32)
+    session.refresh_token = new_refresh_token
+    db.session.commit()
+
+    return jsonify({
+        'success': True,
+        'access_token': access_token,
+        'refresh_token': new_refresh_token
+    })
+
+@app.route('/api/auth/resend-verification', methods=['POST'])
+@token_required
+@limiter.limit("3 per hour")
+def resend_verification(current_user):
+    """Resend email verification"""
+    if current_user.is_verified:
+        return jsonify({'success': False, 'message': 'Email already verified'}), 400
+
+    # Invalidate old tokens
+    EmailVerificationToken.query.filter_by(user_id=current_user.id, used_at=None).delete()
+
+    # Create new verification token
+    token = EmailVerificationToken.generate_token()
+    verification = EmailVerificationToken(
+        user_id=current_user.id,
+        token=token,
+        expires_at=datetime.utcnow() + timedelta(hours=24)
+    )
+    db.session.add(verification)
+    db.session.commit()
+
+    # Send verification email
+    send_verification_email(current_user.email, current_user.username, token)
+
+    SecurityAuditLog.log_action(current_user.id, 'resend_verification', True, get_client_ip(), get_user_agent())
+
+    return jsonify({'success': True, 'message': 'Verification email sent'})
+
 @app.route('/api/rooms/list', methods=['GET'])
 def list_rooms():
     """Get list of active rooms"""
@@ -70,40 +391,58 @@ def list_rooms():
 
 @app.route('/api/leaderboard/global', methods=['GET'])
 def get_global_leaderboard():
-    """Get global leaderboard"""
-    difficulty = request.args.get('difficulty', 'all')
+    """Get global leaderboard from database"""
+    game_mode = request.args.get('difficulty', 'all')  # Using 'difficulty' param for backwards compatibility
 
-    if difficulty == 'all':
-        board = sorted(global_leaderboard, key=lambda x: x['score'], reverse=True)[:50]
-    else:
-        board = sorted(
-            [entry for entry in global_leaderboard if entry['difficulty'] == difficulty],
-            key=lambda x: x['score'],
-            reverse=True
-        )[:10]
+    query = GameHistory.query.filter_by(won=True)
 
-    return jsonify({"leaderboard": board})
+    if game_mode != 'all':
+        query = query.filter_by(game_mode=game_mode)
+
+    # Get top scores
+    leaderboard = query.order_by(GameHistory.score.desc()).limit(50).all()
+
+    return jsonify({
+        "leaderboard": [
+            {
+                "username": game.username,
+                "score": game.score,
+                "time": game.time_seconds,
+                "difficulty": game.game_mode,
+                "hints_used": game.hints_used,
+                "date": game.created_at.isoformat() if game.created_at else None
+            }
+            for game in leaderboard
+        ]
+    })
 
 @app.route('/api/leaderboard/submit', methods=['POST'])
+@limiter.limit("100 per hour")
 def submit_score():
-    """Submit score to global leaderboard"""
+    """Submit score to database leaderboard"""
     data = request.json
-    entry = {
-        "username": data.get("username"),
-        "score": data.get("score"),
-        "time": data.get("time"),
-        "difficulty": data.get("difficulty"),
-        "hints_used": data.get("hints_used"),
-        "date": datetime.now().isoformat()
-    }
-    global_leaderboard.append(entry)
+    username = sanitize_input(data.get("username", "Guest"), 50)
+    score = int(data.get("score", 0))
+    time_seconds = int(data.get("time", 0))
+    game_mode = data.get("difficulty", "standard")  # Using 'difficulty' for backwards compatibility
+    hints_used = int(data.get("hints_used", 0))
+    won = bool(data.get("won", False))
 
-    # Keep only top 1000 scores
-    global_leaderboard.sort(key=lambda x: x['score'], reverse=True)
-    if len(global_leaderboard) > 1000:
-        global_leaderboard[:] = global_leaderboard[:1000]
+    # Create game history entry
+    game = GameHistory(
+        username=username,
+        game_mode=game_mode,
+        score=score,
+        time_seconds=time_seconds,
+        tiles_clicked=score,  # Score is tiles clicked
+        hints_used=hints_used,
+        won=won,
+        multiplayer=False
+    )
+    db.session.add(game)
+    db.session.commit()
 
-    return jsonify({"success": True, "entry": entry})
+    return jsonify({"success": True, "entry": game.to_dict()})
 
 # WebSocket Events
 
