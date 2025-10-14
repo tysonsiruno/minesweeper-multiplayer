@@ -144,26 +144,31 @@ def register():
         return jsonify({'success': False, 'message': 'Email already registered'}), 400
 
     # Create user
-    user = User(username=username, email=email, password_hash=hash_password(password))
-    db.session.add(user)
-    db.session.commit()
+    try:
+        user = User(username=username, email=email, password_hash=hash_password(password))
+        db.session.add(user)
+        db.session.commit()
 
-    # Create verification token
-    token = EmailVerificationToken.generate_token()
-    verification = EmailVerificationToken(
-        user_id=user.id,
-        token=token,
-        expires_at=datetime.utcnow() + timedelta(hours=24)
-    )
-    db.session.add(verification)
-    db.session.commit()
+        # Create verification token
+        token = EmailVerificationToken.generate_token()
+        verification = EmailVerificationToken(
+            user_id=user.id,
+            token=token,
+            expires_at=datetime.utcnow() + timedelta(hours=24)
+        )
+        db.session.add(verification)
+        db.session.commit()
 
-    # Send verification email
-    send_verification_email(email, username, token)
+        # Send verification email
+        send_verification_email(email, username, token)
 
-    SecurityAuditLog.log_action(user.id, 'register', True, get_client_ip(), get_user_agent())
+        SecurityAuditLog.log_action(user.id, 'register', True, get_client_ip(), get_user_agent())
 
-    return jsonify({'success': True, 'message': 'Registration successful. Please check your email to verify your account.', 'user_id': user.id})
+        return jsonify({'success': True, 'message': 'Registration successful. Please check your email to verify your account.', 'user_id': user.id})
+    except Exception as e:
+        db.session.rollback()
+        print(f'Registration error: {e}')
+        return jsonify({'success': False, 'message': 'Registration failed. Please try again.'}), 500
 
 @app.route('/api/auth/login', methods=['POST'])
 @limiter.limit("10 per 15 minutes")
@@ -192,34 +197,39 @@ def login():
         remaining = int((user.locked_until - datetime.utcnow()).total_seconds() / 60)
         return jsonify({'success': False, 'message': f'Account locked. Try again in {remaining} minutes.'}), 403
 
-    # Reset failed attempts
-    user.failed_login_attempts = 0
-    user.last_login = datetime.utcnow()
-    db.session.commit()
+    # Reset failed attempts and create session
+    try:
+        user.failed_login_attempts = 0
+        user.last_login = datetime.utcnow()
+        db.session.commit()
 
-    # Generate tokens
-    access_token = generate_access_token(user.id, user.username, user.is_verified)
-    refresh_token_str = secrets.token_urlsafe(32)
+        # Generate tokens
+        access_token = generate_access_token(user.id, user.username, user.is_verified)
+        refresh_token_str = secrets.token_urlsafe(32)
 
-    session = Session(
-        user_id=user.id,
-        session_token=secrets.token_urlsafe(32),
-        refresh_token=refresh_token_str,
-        expires_at=datetime.utcnow() + (timedelta(days=30) if remember_me else timedelta(days=7)),
-        ip_address=get_client_ip(),
-        user_agent=get_user_agent()
-    )
-    db.session.add(session)
-    db.session.commit()
+        session = Session(
+            user_id=user.id,
+            session_token=secrets.token_urlsafe(32),
+            refresh_token=refresh_token_str,
+            expires_at=datetime.utcnow() + (timedelta(days=30) if remember_me else timedelta(days=7)),
+            ip_address=get_client_ip(),
+            user_agent=get_user_agent()
+        )
+        db.session.add(session)
+        db.session.commit()
 
-    SecurityAuditLog.log_action(user.id, 'login', True, get_client_ip(), get_user_agent())
+        SecurityAuditLog.log_action(user.id, 'login', True, get_client_ip(), get_user_agent())
 
-    return jsonify({
-        'success': True,
-        'access_token': access_token,
-        'refresh_token': refresh_token_str,
-        'user': user.to_dict()
-    })
+        return jsonify({
+            'success': True,
+            'access_token': access_token,
+            'refresh_token': refresh_token_str,
+            'user': user.to_dict()
+        })
+    except Exception as e:
+        db.session.rollback()
+        print(f'Login session creation error: {e}')
+        return jsonify({'success': False, 'message': 'Login failed. Please try again.'}), 500
 
 @app.route('/api/auth/verify-email', methods=['GET'])
 def verify_email():
@@ -232,15 +242,20 @@ def verify_email():
     if not verification or verification.is_expired() or verification.is_used():
         return jsonify({'success': False, 'message': 'Invalid or expired token'}), 400
 
-    user = User.query.get(verification.user_id)
-    user.is_verified = True
-    verification.used_at = datetime.utcnow()
-    db.session.commit()
+    try:
+        user = User.query.get(verification.user_id)
+        user.is_verified = True
+        verification.used_at = datetime.utcnow()
+        db.session.commit()
 
-    send_welcome_email(user.email, user.username)
-    SecurityAuditLog.log_action(user.id, 'email_verified', True, get_client_ip(), get_user_agent())
+        send_welcome_email(user.email, user.username)
+        SecurityAuditLog.log_action(user.id, 'email_verified', True, get_client_ip(), get_user_agent())
 
-    return jsonify({'success': True, 'message': 'Email verified successfully!'})
+        return jsonify({'success': True, 'message': 'Email verified successfully!'})
+    except Exception as e:
+        db.session.rollback()
+        print(f'Email verification error: {e}')
+        return jsonify({'success': False, 'message': 'Verification failed. Please try again.'}), 500
 
 @app.route('/api/auth/forgot-password', methods=['POST'])
 @limiter.limit("3 per hour")
@@ -251,16 +266,21 @@ def forgot_password():
 
     user = User.query.filter_by(email=email).first()
     if user:
-        token = PasswordResetToken.generate_token()
-        reset = PasswordResetToken(
-            user_id=user.id,
-            token=token,
-            expires_at=datetime.utcnow() + timedelta(hours=1),
-            ip_address=get_client_ip()
-        )
-        db.session.add(reset)
-        db.session.commit()
-        send_password_reset_email(email, user.username, token)
+        try:
+            token = PasswordResetToken.generate_token()
+            reset = PasswordResetToken(
+                user_id=user.id,
+                token=token,
+                expires_at=datetime.utcnow() + timedelta(hours=1),
+                ip_address=get_client_ip()
+            )
+            db.session.add(reset)
+            db.session.commit()
+            send_password_reset_email(email, user.username, token)
+        except Exception as e:
+            db.session.rollback()
+            print(f'Password reset token creation error: {e}')
+            return jsonify({'success': False, 'message': 'Failed to send reset link. Please try again.'}), 500
 
     return jsonify({'success': True, 'message': 'If email exists, reset link has been sent'})
 
@@ -279,16 +299,21 @@ def reset_password():
     if not reset or reset.is_expired() or reset.is_used():
         return jsonify({'success': False, 'message': 'Invalid or expired token'}), 400
 
-    user = User.query.get(reset.user_id)
-    user.password_hash = hash_password(new_password)
-    reset.used_at = datetime.utcnow()
+    try:
+        user = User.query.get(reset.user_id)
+        user.password_hash = hash_password(new_password)
+        reset.used_at = datetime.utcnow()
 
-    # Invalidate all sessions
-    Session.query.filter_by(user_id=user.id).delete()
-    db.session.commit()
+        # Invalidate all sessions
+        Session.query.filter_by(user_id=user.id).delete()
+        db.session.commit()
 
-    SecurityAuditLog.log_action(user.id, 'password_reset', True, get_client_ip(), get_user_agent())
-    return jsonify({'success': True, 'message': 'Password reset successfully'})
+        SecurityAuditLog.log_action(user.id, 'password_reset', True, get_client_ip(), get_user_agent())
+        return jsonify({'success': True, 'message': 'Password reset successfully'})
+    except Exception as e:
+        db.session.rollback()
+        print(f'Password reset error: {e}')
+        return jsonify({'success': False, 'message': 'Password reset failed. Please try again.'}), 500
 
 @app.route('/api/auth/logout', methods=['POST'])
 @token_required
@@ -352,25 +377,30 @@ def resend_verification(current_user):
     if current_user.is_verified:
         return jsonify({'success': False, 'message': 'Email already verified'}), 400
 
-    # Invalidate old tokens
-    EmailVerificationToken.query.filter_by(user_id=current_user.id, used_at=None).delete()
+    try:
+        # Invalidate old tokens
+        EmailVerificationToken.query.filter_by(user_id=current_user.id, used_at=None).delete()
 
-    # Create new verification token
-    token = EmailVerificationToken.generate_token()
-    verification = EmailVerificationToken(
-        user_id=current_user.id,
-        token=token,
-        expires_at=datetime.utcnow() + timedelta(hours=24)
-    )
-    db.session.add(verification)
-    db.session.commit()
+        # Create new verification token
+        token = EmailVerificationToken.generate_token()
+        verification = EmailVerificationToken(
+            user_id=current_user.id,
+            token=token,
+            expires_at=datetime.utcnow() + timedelta(hours=24)
+        )
+        db.session.add(verification)
+        db.session.commit()
 
-    # Send verification email
-    send_verification_email(current_user.email, current_user.username, token)
+        # Send verification email
+        send_verification_email(current_user.email, current_user.username, token)
 
-    SecurityAuditLog.log_action(current_user.id, 'resend_verification', True, get_client_ip(), get_user_agent())
+        SecurityAuditLog.log_action(current_user.id, 'resend_verification', True, get_client_ip(), get_user_agent())
 
-    return jsonify({'success': True, 'message': 'Verification email sent'})
+        return jsonify({'success': True, 'message': 'Verification email sent'})
+    except Exception as e:
+        db.session.rollback()
+        print(f'Resend verification error: {e}')
+        return jsonify({'success': False, 'message': 'Failed to send verification email. Please try again.'}), 500
 
 @app.route('/api/rooms/list', methods=['GET'])
 def list_rooms():
@@ -421,28 +451,49 @@ def get_global_leaderboard():
 def submit_score():
     """Submit score to database leaderboard"""
     data = request.json
+
+    # Validate and sanitize inputs
     username = sanitize_input(data.get("username", "Guest"), 50)
-    score = int(data.get("score", 0))
-    time_seconds = int(data.get("time", 0))
-    game_mode = data.get("difficulty", "standard")  # Using 'difficulty' for backwards compatibility
-    hints_used = int(data.get("hints_used", 0))
+
+    # Validate numeric inputs with error handling
+    try:
+        score = int(data.get("score", 0))
+        time_seconds = int(data.get("time", 0))
+        hints_used = int(data.get("hints_used", 0))
+    except (ValueError, TypeError):
+        return jsonify({"success": False, "message": "Invalid numeric value provided"}), 400
+
+    # Validate score and time are non-negative
+    if score < 0 or time_seconds < 0 or hints_used < 0:
+        return jsonify({"success": False, "message": "Score, time, and hints must be non-negative"}), 400
+
+    # Validate reasonable max values to prevent abuse
+    if score > 10000 or time_seconds > 86400 or hints_used > 100:
+        return jsonify({"success": False, "message": "Invalid score values"}), 400
+
+    game_mode = sanitize_input(data.get("difficulty", "standard"), 50)  # Using 'difficulty' for backwards compatibility
     won = bool(data.get("won", False))
 
-    # Create game history entry
-    game = GameHistory(
-        username=username,
-        game_mode=game_mode,
-        score=score,
-        time_seconds=time_seconds,
-        tiles_clicked=score,  # Score is tiles clicked
-        hints_used=hints_used,
-        won=won,
-        multiplayer=False
-    )
-    db.session.add(game)
-    db.session.commit()
+    try:
+        # Create game history entry
+        game = GameHistory(
+            username=username,
+            game_mode=game_mode,
+            score=score,
+            time_seconds=time_seconds,
+            tiles_clicked=score,  # Score is tiles clicked
+            hints_used=hints_used,
+            won=won,
+            multiplayer=False
+        )
+        db.session.add(game)
+        db.session.commit()
 
-    return jsonify({"success": True, "entry": game.to_dict()})
+        return jsonify({"success": True, "entry": game.to_dict()})
+    except Exception as e:
+        db.session.rollback()
+        print(f'Leaderboard submission error: {e}')
+        return jsonify({"success": False, "message": "Failed to submit score. Please try again."}), 500
 
 # WebSocket Events
 

@@ -245,7 +245,12 @@ function setupEventListeners() {
 
 function showScreen(screenId) {
     document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
-    document.getElementById(screenId).classList.add('active');
+    const screen = document.getElementById(screenId);
+    if (!screen) {
+        console.error(`Screen not found: ${screenId}`);
+        return;
+    }
+    screen.classList.add('active');
     state.currentScreen = screenId;
 
     // Initialize username when entering main screen
@@ -1380,13 +1385,14 @@ function quitGame() {
 function populateProfile() {
     const user = getCurrentUser();
 
-    if (!user) {
+    if (!user || typeof getCurrentUser !== 'function') {
+        console.warn('Cannot populate profile: user not found or auth.js not loaded');
         showScreen('login-screen');
         return;
     }
 
     // Populate account info
-    document.getElementById('profile-username').textContent = user.username;
+    document.getElementById('profile-username').textContent = user.username || 'Unknown';
     document.getElementById('profile-email').textContent = user.email || 'N/A';
 
     // Show verification status

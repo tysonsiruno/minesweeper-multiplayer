@@ -695,6 +695,21 @@ function handleResetPasswordSubmit(e) {
 }
 
 // ============================================================================
+// UI HELPERS (for cross-file compatibility)
+// ============================================================================
+
+/**
+ * Show a specific screen (compatible with game.js)
+ */
+function showScreen(screenId) {
+    document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+    const screen = document.getElementById(screenId);
+    if (screen) {
+        screen.classList.add('active');
+    }
+}
+
+// ============================================================================
 // INITIALIZATION
 // ============================================================================
 
