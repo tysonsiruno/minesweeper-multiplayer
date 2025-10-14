@@ -691,12 +691,10 @@ function connectToServer() {
     });
 
     state.socket.on('player_eliminated', (data) => {
-        if (data.username === state.username) {
-            showGameResult(false, 0, 'Eliminated!');
-        }
-        if (data.winner) {
-            showGameResult(data.winner === state.username, 0);
-        }
+        console.log('Player eliminated:', data.username);
+        // Don't show result here - wait for game_ended event
+        // This just notifies that a player died
+        // The game_ended event will show the final results
     });
 
     state.socket.on('error', (data) => {
@@ -924,8 +922,8 @@ function resetGame() {
     // Initialize Time Bomb mode countdown
     if (state.gameMode === 'timebomb') {
         state.timeRemaining = state.timebombStartTime[state.timebombDifficulty];
-        // ICantLose cheat: infinite time
-        if (state.username.toLowerCase() === 'icantlose') {
+        // ICantLose cheat: infinite time (SOLO MODE ONLY)
+        if (state.username.toLowerCase() === 'icantlose' && state.mode === 'solo') {
             state.timeRemaining = 9999;
         }
     }
@@ -1032,14 +1030,17 @@ function revealCell(row, col, isUserClick = true) {
     }
 
     // Time Bomb: Add time bonus ONLY for direct user clicks (not flood fill)
-    if (state.gameMode === 'timebomb' && !cell.isMine && isUserClick && state.username.toLowerCase() !== 'icantlose') {
+    // Skip time bonus for ICantLose cheat in solo mode only
+    const skipTimeBonus = state.username.toLowerCase() === 'icantlose' && state.mode === 'solo';
+    if (state.gameMode === 'timebomb' && !cell.isMine && isUserClick && !skipTimeBonus) {
         state.timeRemaining += state.timebombTimeBonus[state.timebombDifficulty];
         updateTurnIndicator();
     }
 
     if (cell.isMine) {
-        // ICantLose cheat: Skip mine death and remove the bomb
-        if (state.username.toLowerCase() === 'icantlose') {
+        // ICantLose cheat: Skip mine death and remove the bomb (SOLO MODE ONLY)
+        // In multiplayer, cheating breaks the game for everyone, so it's disabled
+        if (state.username.toLowerCase() === 'icantlose' && state.mode === 'solo') {
             // Just reveal the mine but don't die - convert it to a safe tile
             cell.isMine = false;
             cell.adjacentMines = 0;
@@ -1076,19 +1077,21 @@ function revealCell(row, col, isUserClick = true) {
         revealAllMines();
         calculateScore(); // Calculate score based on clicks
 
-        if (state.mode === 'multiplayer' && state.gameMode === 'luck') {
+        // In multiplayer, notify server that this player died
+        if (state.mode === 'multiplayer') {
             state.socket.emit('game_action', { action: 'eliminated', row, col, clicks: state.tilesClicked });
-        }
-
-        drawBoard();
-        if (state.mode === 'solo') {
-            // Show level reached in Survival mode
+            // Don't show result immediately - wait for server to send game_ended event
+        } else {
+            // Solo mode - show result immediately
+            drawBoard();
             if (state.gameMode === 'survival') {
                 setTimeout(() => showGameResult(false, state.score, `Died on Level ${state.survivalLevel}`), 500);
             } else {
                 setTimeout(() => showGameResult(false, state.score), 500);
             }
         }
+
+        drawBoard();
         return;
     }
 
@@ -1128,8 +1131,10 @@ function toggleFlag(row, col) {
     cell.isFlagged = !cell.isFlagged;
     state.flagsPlaced += cell.isFlagged ? 1 : -1;
 
-    // Time Bomb: Add +1 second for placing flag (not removing, not for cheat username)
-    if (state.gameMode === 'timebomb' && cell.isFlagged && !wasFlagged && state.username.toLowerCase() !== 'icantlose') {
+    // Time Bomb: Add +1 second for placing flag (not removing)
+    // Skip time bonus for ICantLose cheat in solo mode only
+    const skipFlagBonus = state.username.toLowerCase() === 'icantlose' && state.mode === 'solo';
+    if (state.gameMode === 'timebomb' && cell.isFlagged && !wasFlagged && !skipFlagBonus) {
         state.timeRemaining += 1;
         updateTurnIndicator();
     }

@@ -789,43 +789,80 @@ def handle_game_action(data):
         except (ValueError, TypeError):
             return
 
-    # Handle elimination in Luck Mode
-    if action == "eliminated" and room["game_mode"] == "luck":
-        # Mark player as eliminated
+    # Handle elimination in ALL game modes
+    if action == "eliminated":
+        # Mark player as eliminated and record their score
         for player in room["players"]:
             if player["session_id"] == request.sid:
                 player["eliminated"] = True
+                player["finished"] = True
+                player["score"] = data.get("clicks", 0)
                 break
 
         # Check if only one player remains
         active_players = [p for p in room["players"] if not p["eliminated"]]
+
         if len(active_players) == 1:
+            # Last player standing wins!
             winner = active_players[0]
+            winner["finished"] = True
+
+            # Notify all players that someone was eliminated and there's a winner
             emit('player_eliminated', {
                 "username": session["username"],
                 "winner": winner["username"]
             }, room=room_code)
-            room["status"] = "finished"
+
+            # Sort players by score (winner first, then by who lasted longest)
+            sorted_players = sorted(room["players"], key=lambda x: (not x["eliminated"], x["score"]), reverse=True)
+
+            # Send game_ended event to show results and return to waiting room
+            emit('game_ended', {
+                "results": sorted_players
+            }, room=room_code)
+
+            # Reset room status for next game
+            room["status"] = "waiting"
+            for player in room["players"]:
+                player["ready"] = False
+                player["score"] = 0
+                player["finished"] = False
+                player["eliminated"] = False
+
+        elif len(active_players) == 0:
+            # Everyone died somehow - tie game
+            emit('game_ended', {
+                "results": room["players"]
+            }, room=room_code)
+
+            room["status"] = "waiting"
+            for player in room["players"]:
+                player["ready"] = False
+                player["score"] = 0
+                player["finished"] = False
+                player["eliminated"] = False
         else:
+            # Multiple players still alive, just notify elimination
             emit('player_eliminated', {
                 "username": session["username"]
             }, room=room_code)
 
-            # Move to next player's turn
-            current_idx = next((i for i, p in enumerate(room["players"]) if p["username"] == room["current_turn"]), 0)
-            next_idx = (current_idx + 1) % len(room["players"])
+            # In Luck Mode (turn-based), move to next player's turn
+            if room["game_mode"] == "luck":
+                current_idx = next((i for i, p in enumerate(room["players"]) if p["username"] == room["current_turn"]), 0)
+                next_idx = (current_idx + 1) % len(room["players"])
 
-            # Find next non-eliminated player
-            attempts = 0
-            while room["players"][next_idx]["eliminated"] and attempts < len(room["players"]):
-                next_idx = (next_idx + 1) % len(room["players"])
-                attempts += 1
+                # Find next non-eliminated player
+                attempts = 0
+                while room["players"][next_idx]["eliminated"] and attempts < len(room["players"]):
+                    next_idx = (next_idx + 1) % len(room["players"])
+                    attempts += 1
 
-            if attempts < len(room["players"]):
-                room["current_turn"] = room["players"][next_idx]["username"]
-                emit('turn_changed', {
-                    "current_turn": room["current_turn"]
-                }, room=room_code)
+                if attempts < len(room["players"]):
+                    room["current_turn"] = room["players"][next_idx]["username"]
+                    emit('turn_changed', {
+                        "current_turn": room["current_turn"]
+                    }, room=room_code)
         return
 
     # Broadcast action to other players in room
