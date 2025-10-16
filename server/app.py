@@ -508,13 +508,22 @@ def get_global_leaderboard():
     """Get global leaderboard from database"""
     game_mode = request.args.get('difficulty', 'all')  # Using 'difficulty' param for backwards compatibility
 
-    query = GameHistory.query.filter_by(won=True)
+    # BUG #490 FIX: Russian Roulette (luck mode) shows all attempts, others only wins
+    if game_mode == 'luck':
+        query = GameHistory.query  # Show all attempts (wins and losses)
+    else:
+        query = GameHistory.query.filter_by(won=True)  # Only show wins for other modes
 
-    if game_mode != 'all':
+    if game_mode != 'all' and game_mode != 'luck':
         query = query.filter_by(game_mode=game_mode)
+    elif game_mode == 'luck':
+        query = query.filter_by(game_mode='luck')
 
-    # Get top scores
-    leaderboard = query.order_by(GameHistory.score.desc()).limit(50).all()
+    # BUG #489 FIX: Standard mode sorts by time (ASC), others by score (DESC)
+    if game_mode == 'standard':
+        leaderboard = query.order_by(GameHistory.score.asc()).limit(50).all()
+    else:
+        leaderboard = query.order_by(GameHistory.score.desc()).limit(50).all()
 
     return jsonify({
         "leaderboard": [

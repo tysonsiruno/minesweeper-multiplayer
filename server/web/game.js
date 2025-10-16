@@ -1939,12 +1939,17 @@ function advanceSurvivalLevel() {
     // Update difficulty
     state.difficulty.mines = state.survivalMineCount;
 
+    // BUG #488 FIX: Add +1 hint per level (max 5)
+    if (state.hintsRemaining < 5) {
+        state.hintsRemaining++;
+    }
+
     // Update title
     document.getElementById('leaderboard-title').textContent = `Survival - ${state.difficulty.name} - Level ${state.survivalLevel}`;
 
     // Show level up message briefly
     const indicator = document.getElementById('turn-indicator');
-    indicator.textContent = `🎉 LEVEL ${state.survivalLevel}! 🎉`;
+    indicator.textContent = `🎉 LEVEL ${state.survivalLevel}! +1 HINT! 🎉`;
     indicator.className = 'turn-indicator';
     indicator.style.display = 'block';
 
@@ -1984,13 +1989,16 @@ function advanceSurvivalLevel() {
 }
 
 function calculateScore() {
-    // New click-based scoring system
+    // BUG #489 FIX: Different scoring for different modes
     if (state.mode === 'solo') {
         // Survival mode: score = total tiles across all levels
         if (state.gameMode === 'survival') {
             state.score = state.survivalTotalTiles + state.tilesClicked;
+        } else if (state.gameMode === 'standard') {
+            // BUG #489 FIX: Standard mode uses time as score (lower is better)
+            state.score = Math.round(state.elapsedTime);
         } else {
-            // Solo: score = tiles clicked (whether won or lost)
+            // Other modes (timebomb, russian roulette): score = tiles clicked
             state.score = state.tilesClicked;
         }
     } else {
@@ -2548,9 +2556,17 @@ function displayGlobalLeaderboard(scores) {
         else if (index === 1) medal = '🥈 ';
         else if (index === 2) medal = '🥉 ';
 
+        // BUG #489 FIX: Show time for standard mode, tiles for others
+        let scoreDisplay;
+        if (state.gameMode === 'standard') {
+            scoreDisplay = `${entry.score}s`;
+        } else {
+            scoreDisplay = `${entry.score} tiles`;
+        }
+
         div.innerHTML = `
             <span>${medal}${index + 1}. ${entry.username}</span>
-            <span>${entry.score} tiles</span>
+            <span>${scoreDisplay}</span>
         `;
         leaderboard.appendChild(div);
     });
