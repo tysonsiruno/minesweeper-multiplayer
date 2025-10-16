@@ -513,6 +513,20 @@ function setupEventListeners() {
                 return;
             }
 
+            // Speed Chess needs its own difficulty selection (Bullet/Blitz/Rapid/Marathon)
+            if (mode === 'speedchess') {
+                state.gameDifficultyScreen = 'speedchess-difficulty-screen';
+                showScreen('speedchess-difficulty-screen');
+                return;
+            }
+
+            // Time Bomb needs its own difficulty selection
+            if (mode === 'timebomb') {
+                state.gameDifficultyScreen = 'timebomb-difficulty-screen';
+                showScreen('timebomb-difficulty-screen');
+                return;
+            }
+
             // Russian Roulette doesn't need difficulty selection
             // BUG #487 FIX: Track difficulty screen for Back button
             state.gameDifficultyScreen = 'gamemode-screen';
@@ -565,6 +579,20 @@ function setupEventListeners() {
                     }
                 }
                 showScreen('board-difficulty-screen');
+                return;
+            }
+
+            // Speed Chess needs its own difficulty selection (Bullet/Blitz/Rapid/Marathon)
+            if (mode === 'speedchess') {
+                state.gameDifficultyScreen = 'speedchess-difficulty-screen';
+                showScreen('speedchess-difficulty-screen');
+                return;
+            }
+
+            // Time Bomb needs its own difficulty selection
+            if (mode === 'timebomb') {
+                state.gameDifficultyScreen = 'timebomb-difficulty-screen';
+                showScreen('timebomb-difficulty-screen');
                 return;
             }
 
