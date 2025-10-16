@@ -60,7 +60,16 @@ const state = {
     survivalTotalTiles: 0,
     survivalMineCount: 40,
     survivalBaseMines: 40,
-    survivalMineIncrease: 1 // Add 1 more mine per level (gradually increasing difficulty)
+    survivalMineIncrease: 1, // Add 1 more mine per level (gradually increasing difficulty)
+
+    // Fog of War mode variables
+    fogOfWar: false, // Is fog of war mode active
+    fogRevealedCells: new Map(), // Track which cells are currently visible {key: 'row,col', value: timestamp}
+    lastClickPosition: null, // {row, col} of last click for 5x5 visibility
+    fogFadeTimers: new Map(), // Track fade timers for each cell
+    flaresRemaining: 0, // Flare power-ups available
+    flareActive: false, // Is flare currently active (revealing whole board)
+    flareTimeout: null // Timeout ID for flare duration
 };
 
 // ============================================================================
@@ -472,12 +481,18 @@ function setupEventListeners() {
                 return;
             }
 
-            // Standard and Survival modes need board difficulty selection
-            if (mode === 'standard' || mode === 'survival') {
+            // Standard, Survival, and Fog of War modes need board difficulty selection
+            if (mode === 'standard' || mode === 'survival' || mode === 'fogofwar') {
                 // Update title based on mode
                 const titleEl = document.getElementById('board-difficulty-title');
                 if (titleEl) {
-                    titleEl.textContent = mode === 'standard' ? 'Standard - Choose Difficulty' : 'Survival - Choose Difficulty';
+                    if (mode === 'standard') {
+                        titleEl.textContent = 'Standard - Choose Difficulty';
+                    } else if (mode === 'survival') {
+                        titleEl.textContent = 'Survival - Choose Difficulty';
+                    } else if (mode === 'fogofwar') {
+                        titleEl.textContent = '🌫️ Fog of War - Choose Difficulty';
+                    }
                 }
                 showScreen('board-difficulty-screen');
                 return;
@@ -519,12 +534,18 @@ function setupEventListeners() {
                 return;
             }
 
-            // Standard and Survival modes need board difficulty selection
-            if (mode === 'standard' || mode === 'survival') {
+            // Standard, Survival, and Fog of War modes need board difficulty selection
+            if (mode === 'standard' || mode === 'survival' || mode === 'fogofwar') {
                 // Update title based on mode
                 const titleEl = document.getElementById('board-difficulty-title');
                 if (titleEl) {
-                    titleEl.textContent = mode === 'standard' ? 'Standard - Choose Difficulty' : 'Survival - Choose Difficulty';
+                    if (mode === 'standard') {
+                        titleEl.textContent = 'Standard - Choose Difficulty';
+                    } else if (mode === 'survival') {
+                        titleEl.textContent = 'Survival - Choose Difficulty';
+                    } else if (mode === 'fogofwar') {
+                        titleEl.textContent = '🌫️ Fog of War - Choose Difficulty';
+                    }
                 }
                 showScreen('board-difficulty-screen');
                 return;
@@ -967,6 +988,9 @@ function setupEventListeners() {
         // Game screen shortcuts
         if (state.currentScreen === 'game-screen') {
             if (e.key === 'h' || e.key === 'H') useHint();
+            if (e.key === 'f' || e.key === 'F') {
+                if (state.fogOfWar) activateFlare();
+            }
         }
     });
 }
@@ -1019,6 +1043,8 @@ function startSoloGame(gameMode = 'standard') {
         document.getElementById('leaderboard-title').textContent = `Time Bomb - ${state.timebombDifficulty.toUpperCase()}`;
     } else if (gameMode === 'survival') {
         document.getElementById('leaderboard-title').textContent = `Survival - ${state.difficulty.name} - Level 1`;
+    } else if (gameMode === 'fogofwar') {
+        document.getElementById('leaderboard-title').textContent = `🌫️ Fog of War - ${state.difficulty.name}`;
     } else {
         document.getElementById('leaderboard-title').textContent = `Standard - ${state.difficulty.name}`;
     }
@@ -1027,6 +1053,7 @@ function startSoloGame(gameMode = 'standard') {
     updateTurnIndicator(); // Show turn indicator for special modes
     updateClearButtonText(); // Update button text based on username
     updateSetScoreButton(); // Show/hide Set Score button for icantlose
+    updateHintButtonText(); // Update hint/flare button text based on game mode
     loadLeaderboard(); // Load leaderboard for this game mode
 }
 
@@ -1415,6 +1442,7 @@ function startMultiplayerGame(boardSeed) {
     if (state.gameMode === 'luck') modeTitle = 'Russian Roulette';
     else if (state.gameMode === 'timebomb') modeTitle = `Time Bomb - ${state.timebombDifficulty.toUpperCase()}`;
     else if (state.gameMode === 'survival') modeTitle = `Survival - ${state.difficulty.name}`;
+    else if (state.gameMode === 'fogofwar') modeTitle = `🌫️ Fog of War - ${state.difficulty.name}`;
     else if (state.gameMode === 'standard') modeTitle = `Standard - ${state.difficulty.name}`;
     document.getElementById('leaderboard-title').textContent = modeTitle;
 
@@ -1438,6 +1466,7 @@ function startMultiplayerGame(boardSeed) {
     updateTurnIndicator();
     updateClearButtonText(); // Update button text based on username
     updateSetScoreButton(); // Show/hide Set Score button for icantlose
+    updateHintButtonText(); // Update hint/flare button text based on game mode
     loadGlobalLeaderboard(); // Load global leaderboard for this mode
 }
 
@@ -1599,6 +1628,28 @@ function resetGame() {
         state.difficulty.mines = state.survivalMineCount;
     }
 
+    // Initialize Fog of War mode
+    if (state.gameMode === 'fogofwar') {
+        state.fogOfWar = true;
+        state.fogRevealedCells = new Map();
+        state.lastClickPosition = null;
+        state.fogFadeTimers = new Map();
+        state.flaresRemaining = 0;
+        state.flareActive = false;
+        if (state.flareTimeout) {
+            clearTimeout(state.flareTimeout);
+            state.flareTimeout = null;
+        }
+    } else {
+        // Disable fog for other modes
+        state.fogOfWar = false;
+        state.fogRevealedCells = new Map();
+        state.lastClickPosition = null;
+        state.fogFadeTimers = new Map();
+        state.flaresRemaining = 0;
+        state.flareActive = false;
+    }
+
     // Initialize board
     for (let row = 0; row < state.difficulty.rows; row++) {
         state.board[row] = [];
@@ -1731,6 +1782,11 @@ function revealCell(row, col, isUserClick = true) {
     // NOW safe to reveal
     cell.isRevealed = true;
 
+    // FOG OF WAR: Track last click position for 5x5 visibility window
+    if (state.fogOfWar && isUserClick) {
+        state.lastClickPosition = { row, col };
+    }
+
     // Time Bomb: Add time bonus ONLY for direct user clicks (not flood fill)
     // Skip time bonus for ICantLose cheat (they have infinite time already)
     if (state.gameMode === 'timebomb' && !cell.isMine && isUserClick && state.username.toLowerCase() !== 'icantlose') {
@@ -1798,6 +1854,11 @@ function revealCell(row, col, isUserClick = true) {
     // Only count safe tiles (not mines) for scoring
     state.tilesClicked++;
     state.totalGameClicks++;
+
+    // FOG OF WAR: Award flare power-up every 20 tiles revealed
+    if (state.fogOfWar && state.tilesClicked > 0 && state.tilesClicked % 20 === 0) {
+        state.flaresRemaining++;
+    }
 
     // Send action to server if multiplayer
     if (state.mode === 'multiplayer' && state.gameStarted) {
@@ -2049,6 +2110,20 @@ function updateSetScoreButton() {
     }
 }
 
+function updateHintButtonText() {
+    // Update hint/flare button text based on game mode
+    const hintBtn = document.getElementById('hint-btn');
+    if (!hintBtn) return;
+
+    if (state.fogOfWar) {
+        hintBtn.textContent = 'Flare (F)';
+        hintBtn.title = 'Reveal entire board for 2 seconds';
+    } else {
+        hintBtn.textContent = 'Hint (H)';
+        hintBtn.title = 'Highlight a safe cell';
+    }
+}
+
 function handleSetScore() {
     // CHEAT: Set score for icantlose in survival mode
     if (state.username.toLowerCase() !== 'icantlose') {
@@ -2170,7 +2245,41 @@ function clearAllFlags() {
     console.log(`Cleared ${flagsCleared} flags`);
 }
 
+// FOG OF WAR: Activate flare to reveal entire board for 2 seconds
+function activateFlare() {
+    if (state.gameOver || !state.startTime || state.flaresRemaining <= 0) return;
+
+    if (!state.minesPlaced || !state.board || state.board.length === 0) {
+        console.warn('Cannot use flare: board not initialized');
+        return;
+    }
+
+    // Activate flare
+    state.flareActive = true;
+    state.flaresRemaining--;
+    updateStats();
+    drawBoard();
+
+    // Clear previous flare timeout if exists
+    if (state.flareTimeout) {
+        clearTimeout(state.flareTimeout);
+    }
+
+    // Deactivate flare after 2 seconds
+    state.flareTimeout = setTimeout(() => {
+        state.flareActive = false;
+        state.flareTimeout = null;
+        drawBoard();
+    }, 2000);
+}
+
 function useHint() {
+    // FOG OF WAR: Use flare instead of hint
+    if (state.fogOfWar) {
+        activateFlare();
+        return;
+    }
+
     // BUG #31 FIX: Check if mines are placed before accessing board
     // BUG #42 FIX: Clear previous hint timeout before creating new one
     // BUG #54 FIX: Validate board exists
@@ -2377,12 +2486,88 @@ function drawBoard() {
             }
         }
     }
+
+    // FOG OF WAR: Render fog overlay
+    if (state.fogOfWar && !state.gameOver) {
+        renderFogOfWar(ctx);
+    }
+}
+
+// FOG OF WAR: Render fog overlay on cells not in visibility window
+function renderFogOfWar(ctx) {
+    const currentTime = Date.now();
+
+    for (let row = 0; row < state.difficulty.rows && row < state.board.length; row++) {
+        if (!state.board[row]) continue;
+        for (let col = 0; col < state.difficulty.cols && col < state.board[row].length; col++) {
+            const cell = state.board[row][col];
+            if (!cell) continue;
+
+            const cellKey = `${row},${col}`;
+            const x = col * state.cellSize;
+            const y = row * state.cellSize;
+
+            // If flare is active, reveal everything
+            if (state.flareActive) {
+                continue; // Skip fog rendering for all cells
+            }
+
+            // Check if cell is in 5x5 visibility window around last click
+            let inVisibilityWindow = false;
+            if (state.lastClickPosition) {
+                const rowDist = Math.abs(row - state.lastClickPosition.row);
+                const colDist = Math.abs(col - state.lastClickPosition.col);
+                inVisibilityWindow = rowDist <= 2 && colDist <= 2; // 5x5 = 2 cells in each direction
+            }
+
+            // Check if cell was previously revealed and still in fade timer
+            const revealTime = state.fogRevealedCells.get(cellKey);
+            let fadeAlpha = 0;
+
+            if (revealTime) {
+                const timeSinceReveal = currentTime - revealTime;
+                const fadeStartTime = 3000; // Start fading after 3 seconds
+
+                if (timeSinceReveal < fadeStartTime) {
+                    // Still visible, no fog
+                    fadeAlpha = 0;
+                } else {
+                    // Should be fogged over
+                    fadeAlpha = 1.0;
+                    // Remove from revealed cells map (memory faded)
+                    state.fogRevealedCells.delete(cellKey);
+                }
+            } else {
+                // Never revealed or already faded
+                fadeAlpha = 1.0;
+            }
+
+            // If in current visibility window, no fog
+            if (inVisibilityWindow) {
+                fadeAlpha = 0;
+                // Update revealed time
+                state.fogRevealedCells.set(cellKey, currentTime);
+            }
+
+            // Draw fog overlay
+            if (fadeAlpha > 0) {
+                ctx.fillStyle = `rgba(44, 62, 80, ${fadeAlpha * 0.9})`; // Dark fog
+                ctx.fillRect(x, y, state.cellSize - 1, state.cellSize - 1);
+            }
+        }
+    }
 }
 
 function updateStats() {
     // Show flags placed vs total mines - more intuitive than "mines left"
     document.getElementById('mines-left').textContent = `🚩 Flags: ${state.flagsPlaced}/${state.difficulty.mines}`;
-    document.getElementById('hints-left').textContent = `💡 Hints: ${state.hintsRemaining}`;
+
+    // Fog of War: Show flares instead of hints
+    if (state.fogOfWar) {
+        document.getElementById('hints-left').textContent = `✨ Flares: ${state.flaresRemaining}`;
+    } else {
+        document.getElementById('hints-left').textContent = `💡 Hints: ${state.hintsRemaining}`;
+    }
 
     // Show time and clicks
     if (state.startTime && !state.gameOver) {
