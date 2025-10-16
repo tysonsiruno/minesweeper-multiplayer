@@ -6,7 +6,10 @@ Password hashing, JWT generation, validation
 import bcrypt
 import jwt
 import re
-from datetime import datetime, timedelta
+import time
+import random
+import uuid
+from datetime import datetime, timedelta, timezone
 from functools import wraps
 from flask import request, jsonify
 import os
@@ -33,10 +36,13 @@ PASSWORD_MIN_LENGTH = 8
 PASSWORD_REGEX = re.compile(r'^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)')
 
 # Username Requirements
+# BUG #242 FIX: Prevent consecutive underscores
 USERNAME_REGEX = re.compile(r'^[a-zA-Z0-9_]{3,20}$')
 
 # Email Validation
-EMAIL_REGEX = re.compile(r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$')
+# BUG #243 FIX: Simplified regex to prevent ReDoS attacks
+# Old regex could cause catastrophic backtracking
+EMAIL_REGEX = re.compile(r'^[a-zA-Z0-9][a-zA-Z0-9._%+-]{0,63}@[a-zA-Z0-9][a-zA-Z0-9.-]{0,252}\.[a-zA-Z]{2,}$')
 
 
 # ============================================================================
@@ -69,14 +75,27 @@ def verify_password(password: str, hashed: str) -> bool:
         True if password matches, False otherwise
     """
     # BUG #135 FIX: Log specific errors for debugging
+    # BUG #237 FIX: Add random delay to prevent timing attacks
+    # bcrypt already provides constant-time comparison, but add extra protection
+    start_time = time.time()
+    result = False
+
     try:
-        return bcrypt.checkpw(password.encode('utf-8'), hashed.encode('utf-8'))
+        result = bcrypt.checkpw(password.encode('utf-8'), hashed.encode('utf-8'))
     except ValueError as e:
         print(f'Password verification ValueError: Invalid hash format')
-        return False
+        result = False
     except Exception as e:
         print(f'Password verification error: {type(e).__name__}')
-        return False
+        result = False
+
+    # Add random delay (10-50ms) to make timing attacks harder
+    elapsed = time.time() - start_time
+    target_time = random.uniform(0.01, 0.05)
+    if elapsed < target_time:
+        time.sleep(target_time - elapsed)
+
+    return result
 
 
 def validate_password(password: str) -> tuple:
@@ -118,6 +137,8 @@ def validate_username(username: str) -> tuple:
     Requirements:
     - 3-20 characters
     - Only letters, numbers, and underscores
+    - No consecutive underscores
+    - Must start with letter or number
 
     Returns:
         (is_valid: bool, error_message: str or None)
@@ -133,6 +154,14 @@ def validate_username(username: str) -> tuple:
 
     if not USERNAME_REGEX.match(username):
         return False, 'Username can only contain letters, numbers, and underscores'
+
+    # BUG #242 FIX: Prevent consecutive underscores
+    if '__' in username:
+        return False, 'Username cannot contain consecutive underscores'
+
+    # Must start with letter or number
+    if username[0] == '_':
+        return False, 'Username must start with a letter or number'
 
     return True, None
 
@@ -170,9 +199,22 @@ def sanitize_input(text: str, max_length: int = 500) -> str:
     if not text:
         return ''
 
-    # BUG #136 FIX: Remove null bytes and other control characters
-    # Remove null bytes and control characters (except tab, newline, carriage return)
-    text = ''.join(char for char in text if ord(char) >= 32 or char in '\t\n\r')
+    # BUG #136, #245 FIX: Remove null bytes, Unicode control characters, and dangerous chars
+    # Allow only printable ASCII + common whitespace, remove Unicode control chars
+    import unicodedata
+
+    # Remove control characters but keep tab, newline, carriage return
+    sanitized = []
+    for char in text:
+        # Get Unicode category
+        category = unicodedata.category(char)
+        # Allow: Letter, Number, Punctuation, Symbol, Space, plus explicit whitespace
+        if category[0] in ('L', 'N', 'P', 'S', 'Z') or char in '\t\n\r':
+            # Skip other control characters (category 'C')
+            if category != 'Cc' or char in '\t\n\r':
+                sanitized.append(char)
+
+    text = ''.join(sanitized)
 
     # Trim to max length
     text = text[:max_length]
@@ -199,12 +241,13 @@ def generate_access_token(user_id: int, username: str) -> str:
         JWT token string
     """
     # BUG #137 FIX: Use timezone-aware datetime (datetime.utcnow deprecated in Python 3.12+)
-    from datetime import timezone
+    # BUG #231 FIX: Add JTI (JWT ID) for token blacklisting support
     now = datetime.now(timezone.utc)
 
     payload = {
         'user_id': user_id,
         'username': username,
+        'jti': str(uuid.uuid4()),  # Unique token ID for blacklisting
         'iat': now,
         'exp': now + ACCESS_TOKEN_EXPIRES,
         'type': 'access'
@@ -225,7 +268,7 @@ def generate_refresh_token(user_id: int, session_id: int, remember_me: bool = Fa
         JWT token string
     """
     # BUG #138 FIX: Use timezone-aware datetime (datetime.utcnow deprecated in Python 3.12+)
-    from datetime import timezone
+    # BUG #231, #232 FIX: Add JTI for blacklisting and token rotation
     now = datetime.now(timezone.utc)
 
     expiry = REFRESH_TOKEN_EXPIRES_REMEMBER if remember_me else REFRESH_TOKEN_EXPIRES
@@ -233,6 +276,7 @@ def generate_refresh_token(user_id: int, session_id: int, remember_me: bool = Fa
     payload = {
         'user_id': user_id,
         'session_id': session_id,
+        'jti': str(uuid.uuid4()),  # Unique token ID for blacklisting
         'iat': now,
         'exp': now + expiry,
         'type': 'refresh'
@@ -312,8 +356,11 @@ def token_required(f):
             # Decode token
             payload = decode_access_token(token)
 
-            # Import here to avoid circular imports
-            from models import User
+            # BUG #231 FIX: Check if token is blacklisted
+            from models import User, TokenBlacklist
+            jti = payload.get('jti')
+            if jti and TokenBlacklist.is_blacklisted(jti):
+                return jsonify({'success': False, 'message': 'Token has been revoked'}), 401
 
             # Get user from database
             # BUG #140 FIX: Validate user_id is an integer
@@ -379,3 +426,75 @@ def get_client_ip():
 def get_user_agent():
     """Get user agent from request"""
     return request.headers.get('User-Agent', '')[:500]  # Limit length
+
+
+def simulate_operation_delay():
+    """
+    BUG #236 FIX: Add random delay to prevent account enumeration
+    Makes all authentication operations take similar time
+    """
+    delay = random.uniform(0.05, 0.15)  # 50-150ms random delay
+    time.sleep(delay)
+
+
+def blacklist_token(token_string: str, reason='logout'):
+    """
+    BUG #231 FIX: Blacklist a JWT token
+
+    Args:
+        token_string: The JWT token to blacklist
+        reason: Reason for blacklisting ('logout', 'password_change', 'security')
+
+    Returns:
+        True if successful, False otherwise
+    """
+    try:
+        from models import TokenBlacklist, db
+
+        # Decode token to get JTI and expiration
+        try:
+            payload = jwt.decode(token_string, JWT_SECRET, algorithms=[JWT_ALGORITHM])
+        except:
+            # Try refresh token secret
+            try:
+                payload = jwt.decode(token_string, JWT_REFRESH_SECRET, algorithms=[JWT_ALGORITHM])
+            except:
+                return False
+
+        jti = payload.get('jti')
+        if not jti:
+            return False
+
+        exp_timestamp = payload.get('exp')
+        if exp_timestamp:
+            expires_at = datetime.fromtimestamp(exp_timestamp, tz=timezone.utc)
+        else:
+            # Default to 1 day if no expiration
+            expires_at = datetime.now(timezone.utc) + timedelta(days=1)
+
+        # Add to blacklist
+        TokenBlacklist.blacklist_token(
+            jti=jti,
+            token_type=payload.get('type', 'unknown'),
+            user_id=payload.get('user_id'),
+            expires_at=expires_at,
+            reason=reason
+        )
+        db.session.commit()
+        return True
+
+    except Exception as e:
+        print(f'Error blacklisting token: {e}')
+        return False
+
+
+def invalidate_all_user_sessions(user_id: int):
+    """
+    BUG #240 FIX: Invalidate all sessions for a user
+    Used when password changes or security breach
+
+    Args:
+        user_id: User ID to invalidate sessions for
+    """
+    from models import Session
+    Session.invalidate_all_for_user(user_id)

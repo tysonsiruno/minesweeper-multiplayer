@@ -31,12 +31,16 @@ DATABASE_URL = os.environ.get('DATABASE_URL')
 if DATABASE_URL and DATABASE_URL.startswith('postgres://'):
     DATABASE_URL = 'postgresql://' + DATABASE_URL[11:]
 
+# BUG #281 FIX: Enhanced database configuration with proper pooling
+from database_utils import get_db_pool_config
+
 app.config['SQLALCHEMY_DATABASE_URI'] = DATABASE_URL or 'sqlite:///minesweeper.db'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
-app.config['SQLALCHEMY_ENGINE_OPTIONS'] = {
-    'pool_pre_ping': True,
-    'pool_recycle': 300,
-}
+
+# BUG #281, #286 FIX: Optimized connection pooling
+environment = os.environ.get('FLASK_ENV', 'production')
+pool_config = get_db_pool_config(environment)
+app.config['SQLALCHEMY_ENGINE_OPTIONS'] = pool_config
 
 # Initialize extensions
 # BUG #111 FIX: Configure CORS properly for production
@@ -59,15 +63,26 @@ limiter = Limiter(
 )
 
 # Initialize database
-from models import db, User, Session, GameHistory, PasswordResetToken, SecurityAuditLog
+# BUG #231 FIX: Import TokenBlacklist for JWT blacklisting
+from models import db, User, Session, GameHistory, PasswordResetToken, SecurityAuditLog, TokenBlacklist
 
 db.init_app(app)
 
 # Import authentication utilities
+# BUG #231, #236, #240 FIX: Import new security functions
 from auth import (
     hash_password, verify_password, validate_password, validate_username, validate_email,
     generate_access_token, generate_refresh_token, decode_access_token, decode_refresh_token,
-    token_required, get_client_ip, get_user_agent, sanitize_input
+    token_required, get_client_ip, get_user_agent, sanitize_input,
+    blacklist_token, invalidate_all_user_sessions, simulate_operation_delay
+)
+
+# Import WebSocket security
+# BUG #261-270 FIX: WebSocket security middleware
+from websocket_security import (
+    validate_socket_event, validate_websocket_handshake, verify_room_permission,
+    safe_error_response, get_namespaced_room, sanitize_room_code,
+    connection_rate_limiter, get_device_info, cleanup_security_state
 )
 
 # Import email service
@@ -81,9 +96,11 @@ with app.app_context():
     db.create_all()
     print("Database tables created successfully!")
 
-# BUG #105 FIX: In-memory storage with size limits
-game_rooms = {}  # {room_code: {host, players, difficulty, status, board_seed}}
-player_sessions = {}  # {session_id: {username, room_code}}
+# BUG #105, #354 FIX: Thread-safe in-memory storage with size limits
+from concurrency import ThreadSafeDict, create_room_atomic, join_room_atomic
+
+game_rooms = ThreadSafeDict()  # {room_code: {host, players, difficulty, status, board_seed}}
+player_sessions = ThreadSafeDict()  # {session_id: {username, room_code}}
 MAX_ROOMS = 1000  # Prevent memory exhaustion
 MAX_SESSIONS = 10000
 

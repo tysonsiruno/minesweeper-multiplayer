@@ -59,26 +59,208 @@ const state = {
     survivalMineIncrease: 1 // Add 1 more mine per level (gradually increasing difficulty)
 };
 
+// ============================================================================
+// BUG FIXES #181-230: Performance & Event Management Utilities
+// ============================================================================
+
+// BUG #181-230 FIXES: Utility functions for performance optimization
+const TOUCH_HANDLED_DELAY = 300; // Bug #181: Reduced from 500ms
+
+// Throttle function for performance optimization (Bug #219, #230)
+function throttle(func, delay) {
+    let lastCall = 0;
+    return function(...args) {
+        const now = Date.now();
+        if (now - lastCall >= delay) {
+            lastCall = now;
+            return func.apply(this, args);
+        }
+    };
+}
+
+// Debounce function for resize handlers (Bug #202, #229)
+function debounce(func, delay) {
+    let timeoutId;
+    return function(...args) {
+        clearTimeout(timeoutId);
+        timeoutId = setTimeout(() => func.apply(this, args), delay);
+    };
+}
+
+// Rate limiter for socket emits (Bug #200)
+const socketRateLimiter = {
+    lastEmit: {},
+    canEmit(event, minDelay = 1000) {
+        const now = Date.now();
+        const last = this.lastEmit[event] || 0;
+        if (now - last >= minDelay) {
+            this.lastEmit[event] = now;
+            return true;
+        }
+        return false;
+    }
+};
+
+// Safe timer management (Bug #185, #189, #195, #196)
+const timerManager = {
+    timers: new Set(),
+    intervals: new Set(),
+
+    setTimeout(callback, delay) {
+        const id = setTimeout(() => {
+            this.timers.delete(id);
+            callback();
+        }, delay);
+        this.timers.add(id);
+        return id;
+    },
+
+    setInterval(callback, delay) {
+        const id = setInterval(callback, delay);
+        this.intervals.add(id);
+        return id;
+    },
+
+    clearTimeout(id) {
+        if (id) {
+            clearTimeout(id);
+            this.timers.delete(id);
+        }
+    },
+
+    clearInterval(id) {
+        if (id) {
+            clearInterval(id);
+            this.intervals.delete(id);
+        }
+    },
+
+    clearAll() {
+        this.timers.forEach(id => clearTimeout(id));
+        this.intervals.forEach(id => clearInterval(id));
+        this.timers.clear();
+        this.intervals.clear();
+    }
+};
+
+// Bug #182, #183: Proper canvas position calculation with offsets
+function getCanvasPosition(e, canvas, isTouch = false) {
+    const rect = canvas.getBoundingClientRect();
+    const clientX = isTouch ? e.touches[0].clientX : e.clientX;
+    const clientY = isTouch ? e.touches[0].clientY : e.clientY;
+
+    return {
+        x: clientX - rect.left,
+        y: clientY - rect.top
+    };
+}
+
+// Bug #186: Generate unique seed to prevent collisions
+function generateUniqueSeed() {
+    return Date.now() + Math.floor(Math.random() * 1000000);
+}
+
+// Bug #197, #198, #199: Proper time calculation and formatting
+function calculateElapsedTime() {
+    if (!state.startTime) return 0;
+    const elapsed = Math.max(0, Date.now() - state.startTime);
+    return Math.floor(elapsed / 1000);
+}
+
+function formatTime(seconds) {
+    seconds = Math.max(0, Math.floor(seconds));
+    const hours = Math.floor(seconds / 3600);
+    const minutes = Math.floor((seconds % 3600) / 60);
+    const secs = seconds % 60;
+
+    if (hours > 0) {
+        return `${hours}:${String(minutes).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
+    }
+    return `${minutes}:${String(secs).padStart(2, '0')}`;
+}
+
+// Bug #191-194: Safe socket emit with validation
+function safeSocketEmit(event, data) {
+    if (!state.socket || !state.socket.connected) {
+        console.warn(`Socket not connected, cannot emit ${event}`);
+        return false;
+    }
+
+    // Validate and sanitize data
+    if (data && typeof data === 'object') {
+        if (data.row !== undefined) data.row = parseInt(data.row) || 0;
+        if (data.col !== undefined) data.col = parseInt(data.col) || 0;
+        if (data.score !== undefined) data.score = Math.max(0, parseInt(data.score) || 0);
+        if (data.time !== undefined) data.time = Math.max(0, parseInt(data.time) || 0);
+    }
+
+    state.socket.emit(event, data);
+    return true;
+}
+
+// Bug #227, #228: Touch/mouse conflict resolution
+let lastInputType = null;
+let lastInputTime = 0;
+const INPUT_COOLDOWN = 300;
+
+function canProcessInput(type) {
+    const now = Date.now();
+    if (now - lastInputTime < INPUT_COOLDOWN && lastInputType !== type && lastInputType !== null) {
+        return false;
+    }
+    lastInputType = type;
+    lastInputTime = now;
+    return true;
+}
+
+// Bug #225: Event listener cleanup
+function cleanupEventListeners() {
+    timerManager.clearAll();
+
+    // Clear specific game timeouts
+    if (state.hintTimeout) {
+        clearTimeout(state.hintTimeout);
+        state.hintTimeout = null;
+    }
+    if (state.survivalLevelTimeout) {
+        clearTimeout(state.survivalLevelTimeout);
+        state.survivalLevelTimeout = null;
+    }
+    if (state.gameResultTimeout) {
+        clearTimeout(state.gameResultTimeout);
+        state.gameResultTimeout = null;
+    }
+    if (state.timerInterval) {
+        clearInterval(state.timerInterval);
+        state.timerInterval = null;
+    }
+}
+
+// ============================================================================
+// END BUG FIXES
+// ============================================================================
+
 // Initialize
 document.addEventListener('DOMContentLoaded', () => {
     setupEventListeners();
     initCanvas();
 
-    // Recalculate canvas size on window resize
-    window.addEventListener('resize', () => {
+    // BUG #202, #229 FIX: Debounced resize handler to prevent excessive redraws
+    window.addEventListener('resize', debounce(() => {
         if (state.currentScreen === 'game-screen') {
             initCanvas();
             drawBoard();
         }
-    });
+    }, 250));
 });
 
 function setupEventListeners() {
     // Helper to prevent both touch and click from firing
     let touchHandled = false;
+    // BUG #181 FIX: Use configurable delay and timerManager
     const preventClickAfterTouch = () => {
         touchHandled = true;
-        setTimeout(() => { touchHandled = false; }, 500);
+        timerManager.setTimeout(() => { touchHandled = false; }, TOUCH_HANDLED_DELAY);
     };
 
     // Mode selection - with proper mobile support
