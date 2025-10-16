@@ -1983,6 +1983,16 @@ function revealCell(row, col, isUserClick = true) {
     // NOW safe to reveal
     cell.isRevealed = true;
 
+    // SABOTAGE: Collect power-up when revealing cell
+    const cellKey = `${row},${col}`;
+    if (state.sabotageMode && state.powerUpCells.has(cellKey)) {
+        const powerUpType = state.powerUpCells.get(cellKey);
+        // Power-up already in inventory from drop
+        state.powerUpCells.delete(cellKey); // Remove from board
+        console.log(`Power-up collected: ${powerUpType}`);
+        // TODO: Show collection notification
+    }
+
     // FOG OF WAR: Track last click position for 5x5 visibility window
     if (state.fogOfWar && isUserClick) {
         state.lastClickPosition = { row, col };
@@ -2059,6 +2069,17 @@ function revealCell(row, col, isUserClick = true) {
     // FOG OF WAR: Award flare power-up every 20 tiles revealed
     if (state.fogOfWar && state.tilesClicked > 0 && state.tilesClicked % 20 === 0) {
         state.flaresRemaining++;
+    }
+
+    // SABOTAGE: 20% chance to drop power-up on tile reveal
+    if (state.sabotageMode && isUserClick && state.powerUps.length < state.maxPowerUps) {
+        if (Math.random() < 0.2) {
+            const powerUpTypes = ['shield', 'scanner', 'fortune', 'rewind', 'sniper'];
+            const randomType = powerUpTypes[Math.floor(Math.random() * powerUpTypes.length)];
+            state.powerUps.push(randomType);
+            state.powerUpCells.set(`${row},${col}`, randomType);
+            console.log(`Power-up dropped: ${randomType}`);
+        }
     }
 
     // Send action to server if multiplayer
@@ -2691,6 +2712,25 @@ function drawBoard() {
                 ctx.closePath();
                 ctx.fill();
             }
+
+            // SABOTAGE: Draw power-up icon on unrevealed cells
+            const cellKey = `${row},${col}`;
+            if (state.sabotageMode && !cell.isRevealed && state.powerUpCells.has(cellKey)) {
+                const powerUpType = state.powerUpCells.get(cellKey);
+                const powerUpEmojis = {
+                    shield: '🛡️',
+                    scanner: '🔍',
+                    fortune: '🍀',
+                    rewind: '⏪',
+                    sniper: '🎯'
+                };
+
+                // Draw power-up emoji
+                ctx.font = (state.cellSize / 2) + 'px Arial';
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.fillText(powerUpEmojis[powerUpType] || '✨', x + state.cellSize / 2, y + state.cellSize / 2);
+            }
         }
     }
 
@@ -2785,6 +2825,67 @@ function updateStats() {
         document.getElementById('timer').textContent = `⏱️ ${timeStr} | Clicks: ${state.tilesClicked}`;
     } else {
         document.getElementById('timer').textContent = `Clicks: ${state.tilesClicked}`;
+    }
+
+    // Update power-up bar in Sabotage mode
+    if (state.sabotageMode) {
+        updatePowerUpBar();
+    }
+}
+
+function updatePowerUpBar() {
+    const powerUpBar = document.getElementById('powerup-bar');
+    const powerUpSlots = document.getElementById('powerup-slots');
+
+    if (!powerUpBar || !powerUpSlots) return;
+
+    // Show/hide power-up bar
+    if (state.sabotageMode && state.startTime) {
+        powerUpBar.style.display = 'block';
+    } else {
+        powerUpBar.style.display = 'none';
+        return;
+    }
+
+    // Clear existing slots
+    powerUpSlots.innerHTML = '';
+
+    // Power-up info
+    const powerUpInfo = {
+        shield: { emoji: '🛡️', name: 'Shield', desc: 'Survive 1 mine' },
+        scanner: { emoji: '🔍', name: 'Scanner', desc: 'Reveal 3x3 area' },
+        fortune: { emoji: '🍀', name: 'Fortune', desc: 'Next 3 clicks safe' },
+        rewind: { emoji: '⏪', name: 'Rewind', desc: 'Undo 5 moves' },
+        sniper: { emoji: '🎯', name: 'Sniper', desc: 'Remove 3 mines' }
+    };
+
+    // Create slots for up to 5 power-ups
+    for (let i = 0; i < state.maxPowerUps; i++) {
+        const slot = document.createElement('div');
+        slot.className = 'powerup-slot';
+        slot.dataset.index = i;
+
+        if (i < state.powerUps.length) {
+            const powerUpType = state.powerUps[i];
+            const info = powerUpInfo[powerUpType];
+
+            slot.classList.add('has-powerup');
+            slot.innerHTML = `
+                <div class="powerup-icon">${info.emoji}</div>
+                <div class="powerup-name">${info.name}</div>
+                <div class="powerup-key">${i + 1}</div>
+            `;
+            slot.title = `${info.name}: ${info.desc}`;
+
+            // Click to activate
+            slot.addEventListener('click', () => activatePowerUp(i));
+        } else {
+            slot.innerHTML = `
+                <div class="powerup-empty">${i + 1}</div>
+            `;
+        }
+
+        powerUpSlots.appendChild(slot);
     }
 }
 
