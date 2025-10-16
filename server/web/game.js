@@ -10,6 +10,7 @@ const state = {
     mode: 'solo', // 'solo' or 'multiplayer'
     gameMode: 'standard', // 'standard', 'luck', 'timebomb', 'survival'
     currentScreen: 'login-screen',
+    previousScreen: null, // BUG #485 FIX: Track previous screen for Back button
     socket: null,
     roomCode: null,
     players: [],
@@ -24,7 +25,7 @@ const state = {
     boardDifficulties: {
         easy: { name: 'Easy', rows: 9, cols: 9, mines: 10 },
         medium: { name: 'Medium', rows: 16, cols: 16, mines: 40 },
-        hard: { name: 'Hard', rows: 30, cols: 16, mines: 99 }
+        hard: { name: 'Hard', rows: 16, cols: 30, mines: 99 } // BUG #484 FIX: 30 wide x 16 tall (landscape)
     },
     board: [],
     cellSize: 30,
@@ -774,8 +775,8 @@ function setupEventListeners() {
     const muteBtn = document.getElementById('mute-btn');
     if (muteBtn) muteBtn.addEventListener('click', toggleSound);
 
-    const quitBtn = document.getElementById('quit-btn');
-    if (quitBtn) quitBtn.addEventListener('click', quitGame);
+    const backBtn = document.getElementById('back-btn');
+    if (backBtn) backBtn.addEventListener('click', goBack);
 
     const resultOkBtn = document.getElementById('result-ok-btn');
     if (resultOkBtn) resultOkBtn.addEventListener('click', () => {
@@ -965,6 +966,8 @@ function showScreen(screenId) {
         return;
     }
     screen.classList.add('active');
+    // BUG #485 FIX: Track screen history for Back button
+    state.previousScreen = state.currentScreen;
     state.currentScreen = screenId;
 }
 
@@ -1719,6 +1722,10 @@ function revealCell(row, col, isUserClick = true) {
     // Skip time bonus for ICantLose cheat (they have infinite time already)
     if (state.gameMode === 'timebomb' && !cell.isMine && isUserClick && state.username.toLowerCase() !== 'icantlose') {
         state.timeRemaining += state.timebombTimeBonus[state.timebombDifficulty];
+        // BUG #486 FIX: Cap time at 999 seconds (unless icantlose cheat)
+        if (state.timeRemaining > 999 && state.username.toLowerCase() !== 'icantlose') {
+            state.timeRemaining = 999;
+        }
         updateTurnIndicator();
     }
 
@@ -1821,6 +1828,10 @@ function toggleFlag(row, col) {
     // Time Bomb: Add +1 second for placing flag (not removing, not for cheat)
     if (state.gameMode === 'timebomb' && cell.isFlagged && !wasFlagged && state.username.toLowerCase() !== 'icantlose') {
         state.timeRemaining += 1;
+        // BUG #486 FIX: Cap time at 999 seconds (unless icantlose cheat)
+        if (state.timeRemaining > 999) {
+            state.timeRemaining = 999;
+        }
         updateTurnIndicator();
     }
 
@@ -2575,11 +2586,11 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 });
 
-function quitGame() {
-    // BUG #34, #38, #41 FIXES: Comprehensive cleanup on quit
-    // Confirm before quitting if game is in progress
+function goBack() {
+    // BUG #485 FIX: Smart back button navigation
+    // Confirm before going back if game is in progress
     if (state.startTime && !state.gameOver) {
-        if (!confirm('Are you sure you want to quit? Your progress will be lost.')) {
+        if (!confirm('Are you sure you want to go back? Your progress will be lost.')) {
             return;
         }
     }
@@ -2597,7 +2608,6 @@ function quitGame() {
         clearTimeout(state.survivalLevelTimeout);
         state.survivalLevelTimeout = null;
     }
-    // BUG #237 FIX: Clear game result timeout
     if (state.gameResultTimeout) {
         clearTimeout(state.gameResultTimeout);
         state.gameResultTimeout = null;
@@ -2607,11 +2617,12 @@ function quitGame() {
     state.gameStarted = false;
     state.gameOver = true; // Prevent any further game actions
 
+    // Smart navigation based on mode
     if (state.mode === 'multiplayer') {
         leaveRoom();
         showScreen('lobby-screen');
     } else {
-        // BUG #483 FIX: Return to mode selection instead of username screen
+        // Solo mode: go to mode selection (Solo/Multiplayer choice)
         showScreen('mode-screen');
     }
 }
