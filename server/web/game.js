@@ -682,17 +682,14 @@ function setupEventListeners() {
                     startSoloGame('timebomb');
                 }
             } else if (speedchessScreen && speedchessScreen.classList.contains('active')) {
-                // Speed Chess mode
+                // Speed Chess mode - save difficulty and move to board selection
                 state.speedChessDifficulty = difficulty;
+                state.pendingGameMode = 'speedchess';
                 state.gameDifficultyScreen = 'speedchess-difficulty-screen';
 
-                if (state.roomCode && state.socket && state.socket.connected) {
-                    state.socket.emit('change_game_mode', { game_mode: 'speedchess' });
-                } else if (state.socket && state.socket.connected) {
-                    createRoom('speedchess');
-                } else {
-                    startSoloGame('speedchess');
-                }
+                // Now show board difficulty selection
+                document.getElementById('board-difficulty-title').textContent = '⏱️ Speed Chess - Choose Board Difficulty';
+                showScreen('board-difficulty-screen');
             }
         }, { passive: false });
 
@@ -724,17 +721,14 @@ function setupEventListeners() {
                     startSoloGame('timebomb');
                 }
             } else if (speedchessScreen && speedchessScreen.classList.contains('active')) {
-                // Speed Chess mode
+                // Speed Chess mode - save difficulty and move to board selection
                 state.speedChessDifficulty = difficulty;
+                state.pendingGameMode = 'speedchess';
                 state.gameDifficultyScreen = 'speedchess-difficulty-screen';
 
-                if (state.roomCode && state.socket && state.socket.connected) {
-                    state.socket.emit('change_game_mode', { game_mode: 'speedchess' });
-                } else if (state.socket && state.socket.connected) {
-                    createRoom('speedchess');
-                } else {
-                    startSoloGame('speedchess');
-                }
+                // Now show board difficulty selection
+                document.getElementById('board-difficulty-title').textContent = '⏱️ Speed Chess - Choose Board Difficulty';
+                showScreen('board-difficulty-screen');
             }
         });
     });
@@ -1134,6 +1128,10 @@ function startSoloGame(gameMode = 'standard') {
         document.getElementById('leaderboard-title').textContent = `Survival - ${state.difficulty.name} - Level 1`;
     } else if (gameMode === 'fogofwar') {
         document.getElementById('leaderboard-title').textContent = `🌫️ Fog of War - ${state.difficulty.name}`;
+    } else if (gameMode === 'speedchess') {
+        document.getElementById('leaderboard-title').textContent = `⏱️ Speed Chess - ${state.speedChessDifficulty.toUpperCase()}`;
+    } else if (gameMode === 'sabotage') {
+        document.getElementById('leaderboard-title').textContent = `⚡ Sabotage - ${state.difficulty.name}`;
     } else {
         document.getElementById('leaderboard-title').textContent = `Standard - ${state.difficulty.name}`;
     }
@@ -1264,6 +1262,8 @@ function connectToServer() {
                 // Start appropriate timer based on game mode
                 if (state.gameMode === 'timebomb') {
                     state.timerInterval = setInterval(updateTimeBombTimer, 1000);
+                } else if (state.gameMode === 'speedchess') {
+                    state.speedChessTimerInterval = setInterval(updateSpeedChessTimer, 1000);
                 } else {
                     state.timerInterval = setInterval(updateTimer, 1000);
                 }
@@ -1591,6 +1591,28 @@ function updateTurnIndicator() {
         indicator.textContent = `⏰ TIME: ${displayTime}s`;
         indicator.className = `turn-indicator ${timeClass}`;
         indicator.style.display = 'block';
+    } else if (state.gameMode === 'speedchess') {
+        // Show chess clock timers for Speed Chess mode
+        const playerTime = Math.max(0, state.playerTimeRemaining);
+        const opponentTime = Math.max(0, state.opponentTimeRemaining);
+
+        // Format time as MM:SS
+        const formatTime = (seconds) => {
+            const mins = Math.floor(seconds / 60);
+            const secs = seconds % 60;
+            return `${mins}:${secs.toString().padStart(2, '0')}`;
+        };
+
+        // Highlight whose turn it is
+        const playerDisplay = state.isPlayerTurn ? `⏱️ YOU: ${formatTime(playerTime)}` : `You: ${formatTime(playerTime)}`;
+        const opponentDisplay = !state.isPlayerTurn ? `⏱️ OPP: ${formatTime(opponentTime)}` : `Opp: ${formatTime(opponentTime)}`;
+
+        // Warning if time is running low (< 10 seconds)
+        const timeClass = (state.isPlayerTurn && playerTime <= 10) || (!state.isPlayerTurn && opponentTime <= 10) ? 'time-critical' : '';
+
+        indicator.textContent = `${playerDisplay} | ${opponentDisplay}`;
+        indicator.className = `turn-indicator ${timeClass}`;
+        indicator.style.display = 'block';
     } else if (state.gameMode === 'survival') {
         // Show survival level
         indicator.textContent = `🏃 Level ${state.survivalLevel} | ${state.survivalMineCount} Mines`;
@@ -1804,6 +1826,29 @@ function resetGame() {
         state.fortuneClicksRemaining = 0;
     }
 
+    // Initialize Speed Chess mode (Chess Clock Timer)
+    if (state.gameMode === 'speedchess') {
+        state.speedChessMode = true;
+        state.playerTimeRemaining = state.speedChessStartTime[state.speedChessDifficulty];
+        state.opponentTimeRemaining = state.speedChessStartTime[state.speedChessDifficulty];
+        state.isPlayerTurn = true; // Player always starts
+
+        // Clear any existing timer
+        if (state.speedChessTimerInterval) {
+            clearInterval(state.speedChessTimerInterval);
+            state.speedChessTimerInterval = null;
+        }
+    } else {
+        // Disable speed chess for other modes
+        state.speedChessMode = false;
+        state.playerTimeRemaining = null;
+        state.opponentTimeRemaining = null;
+        if (state.speedChessTimerInterval) {
+            clearInterval(state.speedChessTimerInterval);
+            state.speedChessTimerInterval = null;
+        }
+    }
+
     // Initialize board
     for (let row = 0; row < state.difficulty.rows; row++) {
         state.board[row] = [];
@@ -1921,6 +1966,8 @@ function revealCell(row, col, isUserClick = true) {
         // Start appropriate timer based on game mode
         if (state.gameMode === 'timebomb') {
             state.timerInterval = setInterval(updateTimeBombTimer, 1000);
+        } else if (state.gameMode === 'speedchess') {
+            state.speedChessTimerInterval = setInterval(updateSpeedChessTimer, 1000);
         } else {
             state.timerInterval = setInterval(updateTimer, 1000);
         }
@@ -2033,6 +2080,12 @@ function revealCell(row, col, isUserClick = true) {
     }
 
     checkWin();
+
+    // Speed Chess: Switch turn after each successful click
+    if (state.gameMode === 'speedchess' && isUserClick && !state.gameOver) {
+        switchSpeedChessTurn();
+    }
+
     drawBoard();
 }
 
@@ -2764,6 +2817,64 @@ function updateTimeBombTimer() {
     }
 }
 
+function updateSpeedChessTimer() {
+    if (state.gameOver) return;
+
+    // Countdown timer for Speed Chess mode - only count down the active player's timer
+    if (state.isPlayerTurn) {
+        state.playerTimeRemaining = Math.max(0, state.playerTimeRemaining - 1);
+    } else {
+        state.opponentTimeRemaining = Math.max(0, state.opponentTimeRemaining - 1);
+    }
+
+    updateTurnIndicator();
+
+    // Check if time's up for either player
+    if (state.playerTimeRemaining <= 0) {
+        state.gameOver = true;
+        state.playerTimeRemaining = 0;
+        revealAllMines();
+        calculateScore();
+        drawBoard();
+
+        // Stop the timer
+        if (state.speedChessTimerInterval) {
+            clearInterval(state.speedChessTimerInterval);
+            state.speedChessTimerInterval = null;
+        }
+
+        state.gameResultTimeout = setTimeout(() => {
+            state.gameResultTimeout = null;
+            showGameResult(false, state.score, 'Time\'s Up! You Ran Out of Time!');
+        }, 500);
+    }
+}
+
+function pauseSpeedChessTimer() {
+    if (state.speedChessTimerInterval) {
+        clearInterval(state.speedChessTimerInterval);
+        state.speedChessTimerInterval = null;
+    }
+}
+
+function resumeSpeedChessTimer() {
+    if (!state.speedChessTimerInterval && state.startTime && !state.gameOver) {
+        state.speedChessTimerInterval = setInterval(updateSpeedChessTimer, 1000);
+    }
+}
+
+function switchSpeedChessTurn() {
+    // Pause timer
+    pauseSpeedChessTimer();
+
+    // Switch turn
+    state.isPlayerTurn = !state.isPlayerTurn;
+
+    // Resume timer with new turn
+    resumeSpeedChessTimer();
+    updateTurnIndicator();
+}
+
 function updateLeaderboard() {
     const leaderboard = document.getElementById('leaderboard');
     leaderboard.innerHTML = '';
@@ -3031,6 +3142,9 @@ function restartSameGameMode() {
     } else if (state.gameMode === 'fogofwar') {
         // Restart Fog of War with same difficulty
         startSoloGame('fogofwar');
+    } else if (state.gameMode === 'speedchess') {
+        // Restart Speed Chess with same difficulty
+        startSoloGame('speedchess');
     } else if (state.gameMode === 'sabotage') {
         // Restart Sabotage with same difficulty
         startSoloGame('sabotage');
