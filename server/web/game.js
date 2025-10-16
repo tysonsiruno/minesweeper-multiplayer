@@ -1356,26 +1356,57 @@ function createRoom(gameMode) {
 function joinRoom() {
     // Trim whitespace
     const roomCode = document.getElementById('room-code-input').value.trim();
+    const errorEl = document.getElementById('join-error');
 
     if (!roomCode || roomCode.length !== 6 || !/^\d{6}$/.test(roomCode)) {
-        document.getElementById('join-error').textContent = 'Please enter a valid 6-digit room code';
+        errorEl.textContent = 'Please enter a valid 6-digit room code';
+        errorEl.style.color = '#ff6b6b';
         return;
     }
 
     // Check socket connection
     if (!state.socket || !state.socket.connected) {
-        document.getElementById('join-error').textContent = 'Not connected to server. Please go back to lobby and try again.';
-        console.error('Socket not connected:', { socket: state.socket, connected: state.socket?.connected });
+        errorEl.textContent = 'Connecting to server...';
+        errorEl.style.color = '#667eea';
+
+        // Try to connect first
+        connectToServer();
+
+        // Wait for connection then retry
+        setTimeout(() => {
+            if (state.socket && state.socket.connected) {
+                joinRoom(); // Retry after connection
+            } else {
+                errorEl.textContent = 'Failed to connect. Please try again.';
+                errorEl.style.color = '#ff6b6b';
+            }
+        }, 2000);
         return;
     }
 
     // Clear any error messages and show loading state
-    document.getElementById('join-error').textContent = 'Joining room...';
-    document.getElementById('join-error').style.color = '#667eea';
+    errorEl.textContent = 'Joining room...';
+    errorEl.style.color = '#667eea';
+
+    console.log('Emitting join_room with code:', roomCode, 'username:', state.displayUsername);
 
     state.socket.emit('join_room', {
         room_code: roomCode,
         username: state.displayUsername // Use display name for multiplayer
+    });
+
+    // Add timeout for join attempt
+    const joinTimeout = setTimeout(() => {
+        if (state.currentScreen === 'join-screen') {
+            errorEl.textContent = 'Room not found or timed out. Please check the code.';
+            errorEl.style.color = '#ff6b6b';
+        }
+    }, 5000);
+
+    // Clear timeout if we successfully join
+    const originalRoomJoined = state.socket._callbacks?.$room_joined;
+    state.socket.once('room_joined', () => {
+        clearTimeout(joinTimeout);
     });
 }
 
