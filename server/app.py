@@ -85,6 +85,16 @@ from websocket_security import (
     connection_rate_limiter, get_device_info, cleanup_security_state
 )
 
+# Import Edge Case utilities
+# BUG #381-400 FIX: Comprehensive validation and error handling
+from edge_case_utils import (
+    safe_get, validate_db_record, validate_max_players,
+    cleanup_inactive_rooms, generate_room_code_with_retry,
+    validate_score_and_time, validate_board_size,
+    safe_multiply, validate_timestamp, normalize_timestamp,
+    safe_route, validate_all_inputs
+)
+
 # Import email service
 from email_service import (
     send_verification_email, send_password_reset_email,
@@ -106,14 +116,11 @@ MAX_SESSIONS = 10000
 
 def generate_room_code():
     """Generate a unique 6-digit numeric room code"""
-    # BUG #106 FIX: Add max attempts to prevent infinite loop
-    max_attempts = 100
-    for attempt in range(max_attempts):
-        code = str(secrets.randbelow(1000000)).zfill(6)
-        if code not in game_rooms:
-            return code
-    # If we can't find a unique code after 100 attempts, raise error
-    raise Exception("Unable to generate unique room code")
+    # BUG #392 FIX: Use enhanced room code generation with retry and cleanup
+    code, error = generate_room_code_with_retry(game_rooms)
+    if error:
+        raise Exception(error)
+    return code
 
 # Security headers middleware
 @app.after_request
@@ -532,21 +539,22 @@ def submit_score():
     # Validate and sanitize inputs
     username = sanitize_input(data.get("username", "Guest"), 50)
 
-    # Validate numeric inputs with error handling
+    # BUG #393-394 FIX: Use comprehensive validation with clamping
+    valid, score, time_seconds, errors = validate_score_and_time(
+        data.get("score", 0),
+        data.get("time", 0)
+    )
+
+    if not valid:
+        print(f"Score/time validation warnings: {errors}")
+    # Continue with clamped values
+
+    # Validate hints_used
     try:
-        score = int(data.get("score", 0))
-        time_seconds = int(data.get("time", 0))
         hints_used = int(data.get("hints_used", 0))
+        hints_used = max(0, min(hints_used, 100))  # Clamp to 0-100
     except (ValueError, TypeError):
-        return jsonify({"success": False, "message": "Invalid numeric value provided"}), 400
-
-    # Validate score and time are non-negative
-    if score < 0 or time_seconds < 0 or hints_used < 0:
-        return jsonify({"success": False, "message": "Score, time, and hints must be non-negative"}), 400
-
-    # Validate reasonable max values to prevent abuse
-    if score > 10000 or time_seconds > 86400 or hints_used > 100:
-        return jsonify({"success": False, "message": "Invalid score values"}), 400
+        hints_used = 0
 
     game_mode = sanitize_input(data.get("difficulty", "standard"), 50)  # Using 'difficulty' for backwards compatibility
     won = bool(data.get("won", False))
@@ -634,15 +642,13 @@ def handle_create_room(data):
     difficulty = sanitize_input(data.get("difficulty", "Medium"), 20)
     game_mode = sanitize_input(data.get("game_mode", "standard"), 20)
 
-    # Validate max_players
-    try:
-        max_players = int(data.get("max_players", 3))
-        if max_players < 2 or max_players > 10:
-            emit('error', {"message": "Max players must be between 2 and 10"})
-            return
-    except (ValueError, TypeError):
-        emit('error', {"message": "Invalid max players value"})
+    # BUG #391 FIX: Validate max_players with configurable limits
+    max_players_input = data.get("max_players", 3)
+    valid, error_msg = validate_max_players(max_players_input)
+    if not valid:
+        emit('error', {"message": error_msg})
         return
+    max_players = int(max_players_input)
 
     room_code = generate_room_code()
 
