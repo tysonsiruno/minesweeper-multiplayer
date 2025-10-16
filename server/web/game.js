@@ -468,7 +468,16 @@ function setupEventListeners() {
     if (createRoomBtn) createRoomBtn.addEventListener('click', () => showScreen('gamemode-screen'));
 
     const joinRoomBtn = document.getElementById('join-room-btn');
-    if (joinRoomBtn) joinRoomBtn.addEventListener('click', () => showScreen('join-screen'));
+    if (joinRoomBtn) joinRoomBtn.addEventListener('click', () => {
+        // Ensure socket is connected before showing join screen
+        if (!state.socket || !state.socket.connected) {
+            console.warn('[join-room-btn] Socket not connected, reconnecting...');
+            connectToServer();
+            setTimeout(() => showScreen('join-screen'), 500); // Give socket time to connect
+        } else {
+            showScreen('join-screen');
+        }
+    });
 
     const backToModeBtn = document.getElementById('back-to-mode');
     if (backToModeBtn) backToModeBtn.addEventListener('click', () => {
@@ -3222,14 +3231,23 @@ function goBack() {
     state.gameStarted = false;
     state.gameOver = true; // Prevent any further game actions
 
+    // IMPORTANT: Preserve gameMode and pendingGameMode so restart works correctly
+    const preservedGameMode = state.gameMode;
+    const preservedBoardDifficulty = state.boardDifficulty;
+    const preservedDifficultyScreen = state.gameDifficultyScreen;
+
     // Smart navigation based on mode
     if (state.mode === 'multiplayer') {
         leaveRoom();
         showScreen('lobby-screen');
     } else {
+        // Restore preserved values for restart
+        state.pendingGameMode = preservedGameMode;
+        console.log('[goBack] Preserved pendingGameMode:', state.pendingGameMode);
+
         // BUG #487 FIX: Go back to difficulty selection screen, not mode selection
         // Solo mode: return to the difficulty screen they came from
-        const targetScreen = state.gameDifficultyScreen || 'mode-screen';
+        const targetScreen = preservedDifficultyScreen || 'mode-screen';
         showScreen(targetScreen);
     }
 }
@@ -3239,29 +3257,40 @@ function restartSameGameMode() {
     // This keeps players in the same mode instead of kicking them back to mode selection
     console.log('[restartSameGameMode] Current gameMode:', state.gameMode);
 
-    if (state.gameMode === 'standard') {
+    // Safety check: if gameMode is not set, try to use pendingGameMode as fallback
+    const modeToRestart = state.gameMode || state.pendingGameMode;
+    console.log('[restartSameGameMode] Using mode:', modeToRestart);
+
+    if (!modeToRestart) {
+        console.error('[restartSameGameMode] No gameMode or pendingGameMode found, going to mode selection');
+        showScreen('mode-screen');
+        return;
+    }
+
+    if (modeToRestart === 'standard') {
         // Restart standard mode with same difficulty
         startSoloGame('standard');
-    } else if (state.gameMode === 'luck') {
+    } else if (modeToRestart === 'luck') {
         // Restart Russian Roulette
         startSoloGame('luck');
-    } else if (state.gameMode === 'timebomb') {
+    } else if (modeToRestart === 'timebomb') {
         // Restart Time Bomb with same difficulty
         startSoloGame('timebomb');
-    } else if (state.gameMode === 'survival') {
+    } else if (modeToRestart === 'survival') {
         // Restart Survival from level 1
         startSoloGame('survival');
-    } else if (state.gameMode === 'fogofwar') {
+    } else if (modeToRestart === 'fogofwar') {
         // Restart Fog of War with same difficulty
         startSoloGame('fogofwar');
-    } else if (state.gameMode === 'speedchess') {
+    } else if (modeToRestart === 'speedchess') {
         // Restart Speed Chess with same difficulty
         startSoloGame('speedchess');
-    } else if (state.gameMode === 'sabotage') {
+    } else if (modeToRestart === 'sabotage') {
         // Restart Sabotage with same difficulty
         startSoloGame('sabotage');
     } else {
         // Fallback: go to mode selection
+        console.warn('[restartSameGameMode] Unknown game mode:', modeToRestart);
         showScreen('mode-screen');
     }
 }
