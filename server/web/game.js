@@ -1989,14 +1989,15 @@ function advanceSurvivalLevel() {
 }
 
 function calculateScore() {
-    // BUG #489 FIX: Different scoring for different modes
+    // BUG #489, #491 FIX: Different scoring for different modes
     if (state.mode === 'solo') {
         // Survival mode: score = total tiles across all levels
         if (state.gameMode === 'survival') {
             state.score = state.survivalTotalTiles + state.tilesClicked;
         } else if (state.gameMode === 'standard') {
-            // BUG #489 FIX: Standard mode uses time as score (lower is better)
-            state.score = Math.round(state.elapsedTime);
+            // BUG #491 FIX: Standard mode uses milliseconds for unique competitive scores
+            const timeMs = Date.now() - state.startTime;
+            state.score = Math.max(0, timeMs); // Time in milliseconds
         } else {
             // Other modes (timebomb, russian roulette): score = tiles clicked
             state.score = state.tilesClicked;
@@ -2495,14 +2496,20 @@ function showGameResult(won, score, customMessage) {
 // Leaderboard Backend Integration
 async function submitScoreToBackend(won, score) {
     try {
+        // BUG #492 FIX: Include board difficulty in game mode for standard/survival modes
+        let difficulty = state.gameMode;
+        if ((state.gameMode === 'standard' || state.gameMode === 'survival') && state.boardDifficulty) {
+            difficulty = `${state.gameMode}-${state.boardDifficulty}`; // e.g., "standard-easy", "survival-hard"
+        }
+
         const response = await fetch(`${SERVER_URL}/api/leaderboard/submit`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-                username: state.username, // LEADERBOARD FIX: Use actual username, not masked displayUsername
+                username: state.displayUsername, // BUG #493 FIX: Use display name for leaderboard (includes funny names for ICantLose)
                 score: score,
                 time: state.elapsedTime,
-                difficulty: state.gameMode, // Use gameMode as difficulty filter
+                difficulty: difficulty, // Use combined game mode + board difficulty
                 hints_used: 3 - state.hintsRemaining,
                 won: won
             })
@@ -2521,8 +2528,14 @@ async function loadLeaderboard() {
 
 async function loadGlobalLeaderboard() {
     try {
+        // BUG #492 FIX: Include board difficulty in game mode for standard/survival modes
+        let difficulty = state.gameMode;
+        if ((state.gameMode === 'standard' || state.gameMode === 'survival') && state.boardDifficulty) {
+            difficulty = `${state.gameMode}-${state.boardDifficulty}`; // e.g., "standard-easy", "survival-hard"
+        }
+
         const response = await fetch(
-            `${SERVER_URL}/api/leaderboard/global?difficulty=${state.gameMode}`
+            `${SERVER_URL}/api/leaderboard/global?difficulty=${difficulty}`
         );
         const data = await response.json();
         displayGlobalLeaderboard(data.leaderboard);
@@ -2556,10 +2569,12 @@ function displayGlobalLeaderboard(scores) {
         else if (index === 1) medal = '🥈 ';
         else if (index === 2) medal = '🥉 ';
 
-        // BUG #489 FIX: Show time for standard mode, tiles for others
+        // BUG #489, #491 FIX: Show time for standard mode, tiles for others
         let scoreDisplay;
         if (state.gameMode === 'standard') {
-            scoreDisplay = `${entry.score}s`;
+            // BUG #491 FIX: Convert milliseconds to seconds with 3 decimal places for competitive precision
+            const seconds = (entry.score / 1000).toFixed(3);
+            scoreDisplay = `${seconds}s`;
         } else {
             scoreDisplay = `${entry.score} tiles`;
         }

@@ -519,8 +519,9 @@ def get_global_leaderboard():
     elif game_mode == 'luck':
         query = query.filter_by(game_mode='luck')
 
-    # BUG #489 FIX: Standard mode sorts by time (ASC), others by score (DESC)
-    if game_mode == 'standard':
+    # BUG #489, #492 FIX: Standard mode sorts by time (ASC), others by score (DESC)
+    # Check if game_mode starts with 'standard' to handle standard-easy, standard-medium, etc.
+    if game_mode.startswith('standard'):
         leaderboard = query.order_by(GameHistory.score.asc()).limit(50).all()
     else:
         leaderboard = query.order_by(GameHistory.score.desc()).limit(50).all()
