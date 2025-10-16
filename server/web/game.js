@@ -69,7 +69,20 @@ const state = {
     fogFadeTimers: new Map(), // Track fade timers for each cell
     flaresRemaining: 0, // Flare power-ups available
     flareActive: false, // Is flare currently active (revealing whole board)
-    flareTimeout: null // Timeout ID for flare duration
+    flareTimeout: null, // Timeout ID for flare duration
+
+    // Sabotage mode variables (Power-Up System)
+    sabotageMode: false, // Is sabotage mode active
+    powerUps: [], // Array of collected power-ups {type, id}
+    maxPowerUps: 5, // Maximum power-ups that can be held
+    powerUpCells: new Map(), // Track which cells have power-ups {key: 'row,col', value: powerUpType}
+    activePowerUp: null, // Currently active power-up effect
+    shieldActive: false, // Shield power-up status
+    fortuneActive: false, // Fortune power-up status (next 5 clicks safe)
+    fortuneClicksRemaining: 0, // Clicks remaining for fortune
+    freezeEndTime: null, // Timestamp when freeze ends
+    ghostModeEndTime: null, // Timestamp when ghost mode ends (hide progress from opponents)
+    rewindHistory: [] // Last 3 moves for rewind power-up {row, col, cell state}
 };
 
 // ============================================================================
@@ -481,8 +494,8 @@ function setupEventListeners() {
                 return;
             }
 
-            // Standard, Survival, and Fog of War modes need board difficulty selection
-            if (mode === 'standard' || mode === 'survival' || mode === 'fogofwar') {
+            // Standard, Survival, Fog of War, and Sabotage modes need board difficulty selection
+            if (mode === 'standard' || mode === 'survival' || mode === 'fogofwar' || mode === 'sabotage') {
                 // Update title based on mode
                 const titleEl = document.getElementById('board-difficulty-title');
                 if (titleEl) {
@@ -492,6 +505,8 @@ function setupEventListeners() {
                         titleEl.textContent = 'Survival - Choose Difficulty';
                     } else if (mode === 'fogofwar') {
                         titleEl.textContent = '🌫️ Fog of War - Choose Difficulty';
+                    } else if (mode === 'sabotage') {
+                        titleEl.textContent = '⚡ Sabotage - Choose Difficulty';
                     }
                 }
                 showScreen('board-difficulty-screen');
@@ -534,8 +549,8 @@ function setupEventListeners() {
                 return;
             }
 
-            // Standard, Survival, and Fog of War modes need board difficulty selection
-            if (mode === 'standard' || mode === 'survival' || mode === 'fogofwar') {
+            // Standard, Survival, Fog of War, and Sabotage modes need board difficulty selection
+            if (mode === 'standard' || mode === 'survival' || mode === 'fogofwar' || mode === 'sabotage') {
                 // Update title based on mode
                 const titleEl = document.getElementById('board-difficulty-title');
                 if (titleEl) {
@@ -545,6 +560,8 @@ function setupEventListeners() {
                         titleEl.textContent = 'Survival - Choose Difficulty';
                     } else if (mode === 'fogofwar') {
                         titleEl.textContent = '🌫️ Fog of War - Choose Difficulty';
+                    } else if (mode === 'sabotage') {
+                        titleEl.textContent = '⚡ Sabotage - Choose Difficulty';
                     }
                 }
                 showScreen('board-difficulty-screen');
@@ -1650,6 +1667,29 @@ function resetGame() {
         state.flareActive = false;
     }
 
+    // Initialize Sabotage mode (Power-Up System)
+    if (state.gameMode === 'sabotage') {
+        state.sabotageMode = true;
+        state.powerUps = [];
+        state.powerUpCells = new Map();
+        state.activePowerUp = null;
+        state.shieldActive = false;
+        state.fortuneActive = false;
+        state.fortuneClicksRemaining = 0;
+        state.freezeEndTime = null;
+        state.ghostModeEndTime = null;
+        state.rewindHistory = [];
+    } else {
+        // Disable sabotage for other modes
+        state.sabotageMode = false;
+        state.powerUps = [];
+        state.powerUpCells = new Map();
+        state.activePowerUp = null;
+        state.shieldActive = false;
+        state.fortuneActive = false;
+        state.fortuneClicksRemaining = 0;
+    }
+
     // Initialize board
     for (let row = 0; row < state.difficulty.rows; row++) {
         state.board[row] = [];
@@ -2681,10 +2721,10 @@ function showGameResult(won, score, customMessage) {
 // Leaderboard Backend Integration
 async function submitScoreToBackend(won, score) {
     try {
-        // BUG #492 FIX: Include board difficulty in game mode for standard/survival modes
+        // BUG #492 FIX: Include board difficulty in game mode for standard/survival/fogofwar/sabotage modes
         let difficulty = state.gameMode;
-        if ((state.gameMode === 'standard' || state.gameMode === 'survival') && state.boardDifficulty) {
-            difficulty = `${state.gameMode}-${state.boardDifficulty}`; // e.g., "standard-easy", "survival-hard"
+        if ((state.gameMode === 'standard' || state.gameMode === 'survival' || state.gameMode === 'fogofwar' || state.gameMode === 'sabotage') && state.boardDifficulty) {
+            difficulty = `${state.gameMode}-${state.boardDifficulty}`; // e.g., "standard-easy", "fogofwar-hard"
         }
 
         const response = await fetch(`${SERVER_URL}/api/leaderboard/submit`, {
@@ -2713,10 +2753,10 @@ async function loadLeaderboard() {
 
 async function loadGlobalLeaderboard() {
     try {
-        // BUG #492 FIX: Include board difficulty in game mode for standard/survival modes
+        // BUG #492 FIX: Include board difficulty in game mode for standard/survival/fogofwar/sabotage modes
         let difficulty = state.gameMode;
-        if ((state.gameMode === 'standard' || state.gameMode === 'survival') && state.boardDifficulty) {
-            difficulty = `${state.gameMode}-${state.boardDifficulty}`; // e.g., "standard-easy", "survival-hard"
+        if ((state.gameMode === 'standard' || state.gameMode === 'survival' || state.gameMode === 'fogofwar' || state.gameMode === 'sabotage') && state.boardDifficulty) {
+            difficulty = `${state.gameMode}-${state.boardDifficulty}`; // e.g., "standard-easy", "fogofwar-hard"
         }
 
         const response = await fetch(
@@ -2744,7 +2784,7 @@ function displayGlobalLeaderboard(scores) {
         return;
     }
 
-    scores.slice(0, 10).forEach((entry, index) => {
+    scores.slice(0, 5).forEach((entry, index) => {
         const div = document.createElement('div');
         div.className = 'leaderboard-entry';
 
@@ -2754,9 +2794,9 @@ function displayGlobalLeaderboard(scores) {
         else if (index === 1) medal = '🥈 ';
         else if (index === 2) medal = '🥉 ';
 
-        // BUG #489, #491 FIX: Show time for standard mode, tiles for others
+        // BUG #489, #491 FIX: Show time for standard/fogofwar modes, tiles for others
         let scoreDisplay;
-        if (state.gameMode === 'standard') {
+        if (state.gameMode === 'standard' || state.gameMode === 'fogofwar') {
             // BUG #491 FIX: Convert milliseconds to seconds with 3 decimal places for competitive precision
             const seconds = (entry.score / 1000).toFixed(3);
             scoreDisplay = `${seconds}s`;
@@ -2874,6 +2914,12 @@ function restartSameGameMode() {
     } else if (state.gameMode === 'survival') {
         // Restart Survival from level 1
         startSoloGame('survival');
+    } else if (state.gameMode === 'fogofwar') {
+        // Restart Fog of War with same difficulty
+        startSoloGame('fogofwar');
+    } else if (state.gameMode === 'sabotage') {
+        // Restart Sabotage with same difficulty
+        startSoloGame('sabotage');
     } else {
         // Fallback: go to mode selection
         showScreen('mode-screen');
