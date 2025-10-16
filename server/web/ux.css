@@ -279,12 +279,6 @@ body.keyboard-visible .input-container {
     transition-duration: 0.01ms !important;
 }
 
-/* Color contrast fixes */
-.btn-primary {
-    background: #0066CC; /* WCAG AA contrast ratio */
-    color: #FFFFFF;
-}
-
 /* Skip navigation */
 .skip-link {
     position: absolute;
