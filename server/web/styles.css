@@ -20,9 +20,8 @@ body {
     /* Fallback solid color for browsers that don't support gradients */
     background-color: #667eea;
     background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-    /* Force gradient to cover entire viewport on mobile */
-    background-attachment: fixed;
     background-size: cover;
+    background-repeat: no-repeat;
     min-height: 100vh;
     display: flex;
     align-items: center;
@@ -890,6 +889,15 @@ input[type="text"]:focus {
    ============================================================================ */
 
 @media (max-width: 600px) {
+    /* BUG #481 FIX: Mobile gradient background not displaying */
+    html, body {
+        background-color: #667eea !important;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%) !important;
+        background-size: 100% 100% !important;
+        background-repeat: no-repeat !important;
+        background-attachment: scroll !important;
+    }
+
     /* BUG #239 FIX: Scale down large headings on mobile */
     h1 {
         font-size: 1.8em;
