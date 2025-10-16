@@ -523,6 +523,9 @@ function setupEventListeners() {
                         titleEl.textContent = '⚡ Sabotage - Choose Difficulty';
                     }
                 }
+                // Track which screen we're on for back button
+                state.gameDifficultyScreen = 'board-difficulty-screen';
+                console.log('[Mode Selection] pendingGameMode set to:', state.pendingGameMode);
                 showScreen('board-difficulty-screen');
                 return;
             }
@@ -592,6 +595,9 @@ function setupEventListeners() {
                         titleEl.textContent = '⚡ Sabotage - Choose Difficulty';
                     }
                 }
+                // Track which screen we're on for back button
+                state.gameDifficultyScreen = 'board-difficulty-screen';
+                console.log('[Mode Selection] pendingGameMode set to:', state.pendingGameMode);
                 showScreen('board-difficulty-screen');
                 return;
             }
@@ -785,6 +791,7 @@ function setupEventListeners() {
             }
 
             const mode = state.pendingGameMode || 'standard';
+            console.log('[Board Difficulty Selection] Using mode:', mode, '(pendingGameMode was:', state.pendingGameMode, ')');
             // BUG #487 FIX: Track difficulty screen for Back button
             state.gameDifficultyScreen = 'board-difficulty-screen';
             // Check if we're already in a room (post-game mode selection)
@@ -833,6 +840,7 @@ function setupEventListeners() {
             }
 
             const mode = state.pendingGameMode || 'standard';
+            console.log('[Board Difficulty Selection] Using mode:', mode, '(pendingGameMode was:', state.pendingGameMode, ')');
             // BUG #487 FIX: Track difficulty screen for Back button
             state.gameDifficultyScreen = 'board-difficulty-screen';
             // Check if we're already in a room (post-game mode selection)
@@ -1092,8 +1100,10 @@ function showScreen(screenId) {
 }
 
 function startSoloGame(gameMode = 'standard') {
+    console.log('[startSoloGame] Starting with gameMode:', gameMode);
     state.mode = 'solo';
     state.gameMode = gameMode;
+    console.log('[startSoloGame] state.gameMode set to:', state.gameMode);
 
     // BUG #231 FIX: Clear pending game mode after starting
     state.pendingGameMode = null;
@@ -3227,6 +3237,7 @@ function goBack() {
 function restartSameGameMode() {
     // Restart the same game mode for grinding better scores
     // This keeps players in the same mode instead of kicking them back to mode selection
+    console.log('[restartSameGameMode] Current gameMode:', state.gameMode);
 
     if (state.gameMode === 'standard') {
         // Restart standard mode with same difficulty
