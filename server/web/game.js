@@ -1598,6 +1598,7 @@ function resetGame() {
     }
 
     updateStats();
+    initCanvas(); // BUG #482 FIX: Re-initialize canvas when difficulty changes
     drawBoard();
     updateTurnIndicator();
 }
@@ -1666,7 +1667,7 @@ function placeMines(excludeRow, excludeCol) {
                         }
                     }
                 }
-                state.board[row][col].adjacentMines = count;
+                            state.board[row][col].adjacentMines = count;
             }
         }
     }
@@ -2610,7 +2611,8 @@ function quitGame() {
         leaveRoom();
         showScreen('lobby-screen');
     } else {
-        showScreen('username-screen');
+        // BUG #483 FIX: Return to mode selection instead of username screen
+        showScreen('mode-screen');
     }
 }
 
