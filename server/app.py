@@ -591,6 +591,32 @@ def submit_score():
         print(f'Leaderboard submission error occurred')
         return jsonify({"success": False, "message": "Failed to submit score. Please try again."}), 500
 
+@app.route('/api/admin/clear-leaderboard', methods=['POST'])
+def clear_leaderboard():
+    """
+    BUG #494 FIX: Admin endpoint to clear all testing leaderboard data
+    SECURITY: This should be protected with authentication in production
+    """
+    try:
+        # Count records before deletion
+        count = GameHistory.query.count()
+        print(f"Clearing {count} leaderboard entries...")
+
+        # Delete all records
+        GameHistory.query.delete()
+        db.session.commit()
+
+        print(f"✅ Successfully deleted {count} leaderboard entries!")
+        return jsonify({
+            "success": True,
+            "message": f"Cleared {count} leaderboard entries",
+            "entries_deleted": count
+        })
+    except Exception as e:
+        db.session.rollback()
+        print(f'Error clearing leaderboard: {e}')
+        return jsonify({"success": False, "message": "Failed to clear leaderboard"}), 500
+
 # WebSocket Events
 
 @socketio.on('connect')
