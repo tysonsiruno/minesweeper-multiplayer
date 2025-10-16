@@ -1398,10 +1398,17 @@ function createRoom(gameMode) {
 }
 
 function joinRoom() {
-    // Trim whitespace
-    const roomCode = document.getElementById('room-code-input').value.trim();
+    const roomCodeInput = document.getElementById('room-code-input');
     const errorEl = document.getElementById('join-error');
 
+    if (!roomCodeInput || !errorEl) {
+        console.error('Join room elements not found');
+        return;
+    }
+
+    const roomCode = roomCodeInput.value.trim();
+
+    // Validate room code format
     if (!roomCode || roomCode.length !== 6 || !/^\d{6}$/.test(roomCode)) {
         errorEl.textContent = 'Please enter a valid 6-digit room code';
         errorEl.style.color = '#ff6b6b';
@@ -1410,48 +1417,31 @@ function joinRoom() {
 
     // Check socket connection
     if (!state.socket || !state.socket.connected) {
-        errorEl.textContent = 'Connecting to server...';
-        errorEl.style.color = '#667eea';
-
-        // Try to connect first
-        connectToServer();
-
-        // Wait for connection then retry
-        setTimeout(() => {
-            if (state.socket && state.socket.connected) {
-                joinRoom(); // Retry after connection
-            } else {
-                errorEl.textContent = 'Failed to connect. Please try again.';
-                errorEl.style.color = '#ff6b6b';
-            }
-        }, 2000);
+        errorEl.textContent = 'Not connected. Go back to lobby to connect.';
+        errorEl.style.color = '#ff6b6b';
+        console.error('Socket not connected:', { socket: !!state.socket, connected: state.socket?.connected });
         return;
     }
 
-    // Clear any error messages and show loading state
+    // Clear any previous errors and show loading
     errorEl.textContent = 'Joining room...';
     errorEl.style.color = '#667eea';
 
-    console.log('Emitting join_room with code:', roomCode, 'username:', state.displayUsername);
+    console.log('Joining room:', roomCode, 'Username:', state.displayUsername);
 
+    // Emit join_room event
     state.socket.emit('join_room', {
         room_code: roomCode,
-        username: state.displayUsername // Use display name for multiplayer
+        username: state.displayUsername
     });
 
-    // Add timeout for join attempt
-    const joinTimeout = setTimeout(() => {
+    // Set a timeout in case join fails
+    setTimeout(() => {
         if (state.currentScreen === 'join-screen') {
-            errorEl.textContent = 'Room not found or timed out. Please check the code.';
+            errorEl.textContent = 'Failed to join. Please check the room code.';
             errorEl.style.color = '#ff6b6b';
         }
     }, 5000);
-
-    // Clear timeout if we successfully join
-    const originalRoomJoined = state.socket._callbacks?.$room_joined;
-    state.socket.once('room_joined', () => {
-        clearTimeout(joinTimeout);
-    });
 }
 
 function showWaitingRoom() {
@@ -1641,25 +1631,43 @@ function initCanvas() {
     const rows = Math.max(1, state.difficulty.rows || 16);
     const cols = Math.max(1, state.difficulty.cols || 16);
 
+    // Detect mobile vs desktop
+    const isMobile = window.innerWidth < 768;
+
     // Adaptive max dimensions based on board size
-    // Account for sidebar (250px) + gap (20px) + padding (60px) = 330px
-    const sidebarSpace = 360;
-    const availableWidth = window.innerWidth - sidebarSpace;
+    let sidebarSpace, maxWidth, maxHeight;
 
-    let maxWidth, maxHeight;
+    if (isMobile) {
+        // Mobile: sidebar is below board, use full width minus padding
+        sidebarSpace = 40; // Just padding
+        const availableWidth = window.innerWidth - sidebarSpace;
 
-    if (cols <= 10) {
-        // Easy mode: allow larger cells and smaller canvas
-        maxWidth = Math.min(availableWidth, 500);
-        maxHeight = Math.min(window.innerHeight - 250, 500);
-    } else if (cols >= 25) {
-        // Hard mode: need much wider canvas
-        maxWidth = Math.min(availableWidth, 900);
-        maxHeight = Math.min(window.innerHeight - 250, 600);
+        if (cols <= 10) {
+            maxWidth = Math.min(availableWidth, 450);
+            maxHeight = Math.min(window.innerHeight - 200, 450);
+        } else if (cols >= 25) {
+            // Hard mode on mobile: use full width, smaller cells
+            maxWidth = availableWidth;
+            maxHeight = Math.min(window.innerHeight - 200, 500);
+        } else {
+            maxWidth = Math.min(availableWidth, 600);
+            maxHeight = Math.min(window.innerHeight - 200, 600);
+        }
     } else {
-        // Medium mode: balanced
-        maxWidth = Math.min(availableWidth, 700);
-        maxHeight = Math.min(window.innerHeight - 250, 700);
+        // Desktop: account for sidebar (250px) + gap (20px) + padding (90px)
+        sidebarSpace = 360;
+        const availableWidth = window.innerWidth - sidebarSpace;
+
+        if (cols <= 10) {
+            maxWidth = Math.min(availableWidth, 500);
+            maxHeight = Math.min(window.innerHeight - 250, 500);
+        } else if (cols >= 25) {
+            maxWidth = Math.min(availableWidth, 900);
+            maxHeight = Math.min(window.innerHeight - 250, 600);
+        } else {
+            maxWidth = Math.min(availableWidth, 700);
+            maxHeight = Math.min(window.innerHeight - 250, 700);
+        }
     }
 
     // Calculate cell size that fits screen
@@ -1667,9 +1675,12 @@ function initCanvas() {
     const cellSizeByHeight = Math.floor(maxHeight / rows);
 
     // Use the smaller dimension to ensure it fits screen
-    // Allow 15px minimum for readability, max 50px for easy mode
+    // Mobile: allow 12px minimum for hard mode, Desktop: 15px minimum
+    const minCellSize = isMobile && cols >= 25 ? 10 : 15;
+    const maxCellSize = cols <= 10 ? 50 : 40;
+
     const calculatedSize = Math.min(cellSizeByWidth, cellSizeByHeight);
-    state.cellSize = Math.max(15, Math.min(calculatedSize, 50));
+    state.cellSize = Math.max(minCellSize, Math.min(calculatedSize, maxCellSize));
 
     const width = Math.max(100, cols * state.cellSize);
     const height = Math.max(100, rows * state.cellSize);
