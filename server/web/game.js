@@ -82,7 +82,21 @@ const state = {
     fortuneClicksRemaining: 0, // Clicks remaining for fortune
     freezeEndTime: null, // Timestamp when freeze ends
     ghostModeEndTime: null, // Timestamp when ghost mode ends (hide progress from opponents)
-    rewindHistory: [] // Last 3 moves for rewind power-up {row, col, cell state}
+    rewindHistory: [], // Last 3 moves for rewind power-up {row, col, cell state}
+
+    // Speed Chess mode variables (Chess Clock Timer)
+    speedChessMode: false, // Is speed chess mode active
+    speedChessDifficulty: 'blitz', // bullet, blitz, rapid, marathon
+    playerTimeRemaining: null, // Time remaining for current player (in seconds)
+    opponentTimeRemaining: null, // Time remaining for opponent (in seconds)
+    speedChessTimerInterval: null, // Interval ID for countdown
+    speedChessStartTime: {
+        bullet: 30,    // 30 seconds
+        blitz: 60,     // 1 minute
+        rapid: 180,    // 3 minutes
+        marathon: 300  // 5 minutes
+    },
+    isPlayerTurn: true // Whose timer is currently counting down
 };
 
 // ============================================================================
@@ -640,7 +654,7 @@ function setupEventListeners() {
         });
     }
 
-    // Time Bomb difficulty selection - with proper mobile support (prevent double-fire)
+    // Difficulty selection - handles both Time Bomb and Speed Chess with proper mobile support
     document.querySelectorAll('.select-difficulty').forEach(btn => {
         btn.addEventListener('touchend', (e) => {
             e.preventDefault();
@@ -650,20 +664,35 @@ function setupEventListeners() {
             const modeCard = e.target.closest('.mode-card');
             if (!modeCard) return;
             const difficulty = modeCard.dataset.difficulty;
-            state.timebombDifficulty = difficulty;
-            // BUG #487 FIX: Track difficulty screen for Back button
-            state.gameDifficultyScreen = 'timebomb-difficulty-screen';
 
-            // Check if we're already in a room (post-game mode selection)
-            if (state.roomCode && state.socket && state.socket.connected) {
-                // Change mode in existing room
-                state.socket.emit('change_game_mode', { game_mode: 'timebomb' });
-            } else if (state.socket && state.socket.connected) {
-                // Create new room
-                createRoom('timebomb');
-            } else {
-                // Solo mode
-                startSoloGame('timebomb');
+            // Detect which difficulty screen we're on
+            const timebombScreen = document.getElementById('timebomb-difficulty-screen');
+            const speedchessScreen = document.getElementById('speedchess-difficulty-screen');
+
+            if (timebombScreen && timebombScreen.classList.contains('active')) {
+                // Time Bomb mode
+                state.timebombDifficulty = difficulty;
+                state.gameDifficultyScreen = 'timebomb-difficulty-screen';
+
+                if (state.roomCode && state.socket && state.socket.connected) {
+                    state.socket.emit('change_game_mode', { game_mode: 'timebomb' });
+                } else if (state.socket && state.socket.connected) {
+                    createRoom('timebomb');
+                } else {
+                    startSoloGame('timebomb');
+                }
+            } else if (speedchessScreen && speedchessScreen.classList.contains('active')) {
+                // Speed Chess mode
+                state.speedChessDifficulty = difficulty;
+                state.gameDifficultyScreen = 'speedchess-difficulty-screen';
+
+                if (state.roomCode && state.socket && state.socket.connected) {
+                    state.socket.emit('change_game_mode', { game_mode: 'speedchess' });
+                } else if (state.socket && state.socket.connected) {
+                    createRoom('speedchess');
+                } else {
+                    startSoloGame('speedchess');
+                }
             }
         }, { passive: false });
 
@@ -677,20 +706,35 @@ function setupEventListeners() {
             const modeCard = e.target.closest('.mode-card');
             if (!modeCard) return;
             const difficulty = modeCard.dataset.difficulty;
-            state.timebombDifficulty = difficulty;
-            // BUG #487 FIX: Track difficulty screen for Back button
-            state.gameDifficultyScreen = 'timebomb-difficulty-screen';
 
-            // Check if we're already in a room (post-game mode selection)
-            if (state.roomCode && state.socket && state.socket.connected) {
-                // Change mode in existing room
-                state.socket.emit('change_game_mode', { game_mode: 'timebomb' });
-            } else if (state.socket && state.socket.connected) {
-                // Create new room
-                createRoom('timebomb');
-            } else {
-                // Solo mode
-                startSoloGame('timebomb');
+            // Detect which difficulty screen we're on
+            const timebombScreen = document.getElementById('timebomb-difficulty-screen');
+            const speedchessScreen = document.getElementById('speedchess-difficulty-screen');
+
+            if (timebombScreen && timebombScreen.classList.contains('active')) {
+                // Time Bomb mode
+                state.timebombDifficulty = difficulty;
+                state.gameDifficultyScreen = 'timebomb-difficulty-screen';
+
+                if (state.roomCode && state.socket && state.socket.connected) {
+                    state.socket.emit('change_game_mode', { game_mode: 'timebomb' });
+                } else if (state.socket && state.socket.connected) {
+                    createRoom('timebomb');
+                } else {
+                    startSoloGame('timebomb');
+                }
+            } else if (speedchessScreen && speedchessScreen.classList.contains('active')) {
+                // Speed Chess mode
+                state.speedChessDifficulty = difficulty;
+                state.gameDifficultyScreen = 'speedchess-difficulty-screen';
+
+                if (state.roomCode && state.socket && state.socket.connected) {
+                    state.socket.emit('change_game_mode', { game_mode: 'speedchess' });
+                } else if (state.socket && state.socket.connected) {
+                    createRoom('speedchess');
+                } else {
+                    startSoloGame('speedchess');
+                }
             }
         });
     });
