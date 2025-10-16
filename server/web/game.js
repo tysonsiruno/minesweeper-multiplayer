@@ -11,6 +11,7 @@ const state = {
     gameMode: 'standard', // 'standard', 'luck', 'timebomb', 'survival'
     currentScreen: 'login-screen',
     previousScreen: null, // BUG #485 FIX: Track previous screen for Back button
+    gameDifficultyScreen: null, // BUG #487 FIX: Track difficulty selection screen for Back button
     socket: null,
     roomCode: null,
     players: [],
@@ -483,6 +484,8 @@ function setupEventListeners() {
             }
 
             // Russian Roulette doesn't need difficulty selection
+            // BUG #487 FIX: Track difficulty screen for Back button
+            state.gameDifficultyScreen = 'gamemode-screen';
             // Check if we're already in a room (post-game mode selection)
             if (state.roomCode && state.socket && state.socket.connected) {
                 // Change mode in existing room
@@ -528,6 +531,8 @@ function setupEventListeners() {
             }
 
             // Russian Roulette doesn't need difficulty selection
+            // BUG #487 FIX: Track difficulty screen for Back button
+            state.gameDifficultyScreen = 'gamemode-screen';
             // Check if we're already in a room (post-game mode selection)
             if (state.roomCode && state.socket && state.socket.connected) {
                 // Change mode in existing room
@@ -580,6 +585,8 @@ function setupEventListeners() {
             if (!modeCard) return;
             const difficulty = modeCard.dataset.difficulty;
             state.timebombDifficulty = difficulty;
+            // BUG #487 FIX: Track difficulty screen for Back button
+            state.gameDifficultyScreen = 'timebomb-difficulty-screen';
 
             // Check if we're already in a room (post-game mode selection)
             if (state.roomCode && state.socket && state.socket.connected) {
@@ -605,6 +612,8 @@ function setupEventListeners() {
             if (!modeCard) return;
             const difficulty = modeCard.dataset.difficulty;
             state.timebombDifficulty = difficulty;
+            // BUG #487 FIX: Track difficulty screen for Back button
+            state.gameDifficultyScreen = 'timebomb-difficulty-screen';
 
             // Check if we're already in a room (post-game mode selection)
             if (state.roomCode && state.socket && state.socket.connected) {
@@ -672,6 +681,8 @@ function setupEventListeners() {
             }
 
             const mode = state.pendingGameMode || 'standard';
+            // BUG #487 FIX: Track difficulty screen for Back button
+            state.gameDifficultyScreen = 'board-difficulty-screen';
             // Check if we're already in a room (post-game mode selection)
             if (state.roomCode && state.socket && state.socket.connected) {
                 // Change mode in existing room
@@ -718,6 +729,8 @@ function setupEventListeners() {
             }
 
             const mode = state.pendingGameMode || 'standard';
+            // BUG #487 FIX: Track difficulty screen for Back button
+            state.gameDifficultyScreen = 'board-difficulty-screen';
             // Check if we're already in a room (post-game mode selection)
             if (state.roomCode && state.socket && state.socket.connected) {
                 // Change mode in existing room
@@ -2622,8 +2635,10 @@ function goBack() {
         leaveRoom();
         showScreen('lobby-screen');
     } else {
-        // Solo mode: go to mode selection (Solo/Multiplayer choice)
-        showScreen('mode-screen');
+        // BUG #487 FIX: Go back to difficulty selection screen, not mode selection
+        // Solo mode: return to the difficulty screen they came from
+        const targetScreen = state.gameDifficultyScreen || 'mode-screen';
+        showScreen(targetScreen);
     }
 }
 
