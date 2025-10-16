@@ -1,5 +1,7 @@
 // Configuration
-const SERVER_URL = 'https://minesweeper-server-production-ecec.up.railway.app';
+// Automatically detect server URL based on current location
+// This works for Railway, localhost, or any other deployment
+const SERVER_URL = window.location.origin;
 
 // Game State
 const state = {

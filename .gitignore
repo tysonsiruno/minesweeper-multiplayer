@@ -12,3 +12,7 @@ leaderboard.json
 *.swp
 *.swo
 *~
+.env
+*.db
+*.sqlite
+*.sqlite3
