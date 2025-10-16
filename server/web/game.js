@@ -1091,6 +1091,14 @@ function setupEventListeners() {
             if (e.key === 'f' || e.key === 'F') {
                 if (state.fogOfWar) activateFlare();
             }
+
+            // Sabotage mode: Keys 1-5 activate power-ups
+            if (state.sabotageMode) {
+                if (e.key >= '1' && e.key <= '5') {
+                    const index = parseInt(e.key) - 1;
+                    activatePowerUp(index);
+                }
+            }
         }
     });
 }
@@ -2029,6 +2037,48 @@ function revealCell(row, col, isUserClick = true) {
     }
 
     if (cell.isMine) {
+        // SABOTAGE: Shield blocks mine hit
+        if (state.sabotageMode && state.shieldActive) {
+            console.log('[Sabotage] Shield blocked mine hit!');
+            state.shieldActive = false;
+            cell.isRevealed = false; // Undo reveal
+            updateStats();
+            drawBoard();
+            return; // Continue playing
+        }
+
+        // SABOTAGE: Fortune prevents mine hits
+        if (state.sabotageMode && state.fortuneActive && state.fortuneClicksRemaining > 0) {
+            console.log('[Sabotage] Fortune prevented mine hit! Re-rolling...');
+            cell.isRevealed = false; // Undo reveal
+
+            // Find a random safe tile instead
+            const safeTiles = [];
+            for (let r = 0; r < state.difficulty.rows; r++) {
+                for (let c = 0; c < state.difficulty.cols; c++) {
+                    const safeCell = state.board[r][c];
+                    if (!safeCell.isRevealed && !safeCell.isMine && !safeCell.isFlagged) {
+                        safeTiles.push({ row: r, col: c });
+                    }
+                }
+            }
+
+            if (safeTiles.length > 0) {
+                const safeTile = safeTiles[Math.floor(Math.random() * safeTiles.length)];
+                revealCell(safeTile.row, safeTile.col, true);
+            }
+
+            state.fortuneClicksRemaining--;
+            if (state.fortuneClicksRemaining <= 0) {
+                state.fortuneActive = false;
+                console.log('[Sabotage] Fortune expired');
+            }
+
+            updateStats();
+            drawBoard();
+            return;
+        }
+
         // CRITICAL FIX: ICantLose cheat WITHOUT modifying board state
         // Previous version recalculated adjacent mines, causing numbers to change mid-game!
         if (state.username.toLowerCase() === 'icantlose') {
@@ -2518,6 +2568,134 @@ function activateFlare() {
         state.flareTimeout = null;
         drawBoard();
     }, 2000);
+}
+
+// SABOTAGE MODE: Power-Up Activation
+function activatePowerUp(index) {
+    if (!state.sabotageMode || state.gameOver || !state.startTime) return;
+    if (index < 0 || index >= state.powerUps.length) return;
+
+    const powerUpType = state.powerUps[index];
+    console.log(`[Sabotage] Activating power-up: ${powerUpType} (slot ${index})`);
+
+    // Remove power-up from inventory
+    state.powerUps.splice(index, 1);
+    updatePowerUpBar();
+
+    // Activate power-up effect
+    switch (powerUpType) {
+        case 'shield':
+            activateShield();
+            break;
+        case 'scanner':
+            activateScanner();
+            break;
+        case 'fortune':
+            activateFortune();
+            break;
+        case 'rewind':
+            activateRewind();
+            break;
+        case 'sniper':
+            activateSniper();
+            break;
+        default:
+            console.warn(`Unknown power-up type: ${powerUpType}`);
+    }
+}
+
+function activateShield() {
+    state.shieldActive = true;
+    console.log('[Sabotage] Shield activated - next mine hit will be blocked');
+}
+
+function activateScanner() {
+    console.log('[Sabotage] Scanner activated - revealing 3x3 safe tiles');
+
+    const safeTiles = [];
+    for (let row = 0; row < state.difficulty.rows; row++) {
+        for (let col = 0; col < state.difficulty.cols; col++) {
+            const cell = state.board[row][col];
+            if (!cell.isRevealed && !cell.isMine && !cell.isFlagged) {
+                safeTiles.push({ row, col });
+            }
+        }
+    }
+
+    if (safeTiles.length === 0) return;
+
+    const center = safeTiles[Math.floor(Math.random() * safeTiles.length)];
+
+    for (let dr = -1; dr <= 1; dr++) {
+        for (let dc = -1; dc <= 1; dc++) {
+            const r = center.row + dr;
+            const c = center.col + dc;
+            if (r >= 0 && r < state.difficulty.rows && c >= 0 && c < state.difficulty.cols) {
+                const cell = state.board[r][c];
+                if (!cell.isRevealed && !cell.isMine) {
+                    revealCell(r, c, false);
+                }
+            }
+        }
+    }
+}
+
+function activateFortune() {
+    state.fortuneActive = true;
+    state.fortuneClicksRemaining = 3;
+    console.log('[Sabotage] Fortune activated - next 3 clicks guaranteed safe');
+}
+
+function activateRewind() {
+    console.log('[Sabotage] Rewind not implemented yet');
+}
+
+function activateSniper() {
+    console.log('[Sabotage] Sniper activated - removing 3 random mines');
+
+    const mines = [];
+    for (let row = 0; row < state.difficulty.rows; row++) {
+        for (let col = 0; col < state.difficulty.cols; col++) {
+            const cell = state.board[row][col];
+            if (cell.isMine && !cell.isRevealed) {
+                mines.push({ row, col });
+            }
+        }
+    }
+
+    if (mines.length === 0) return;
+
+    const toRemove = Math.min(3, mines.length);
+    for (let i = 0; i < toRemove; i++) {
+        const randomIndex = Math.floor(Math.random() * mines.length);
+        const { row, col } = mines.splice(randomIndex, 1)[0];
+
+        state.board[row][col].isMine = false;
+        state.difficulty.mines--;
+
+        for (let dr = -1; dr <= 1; dr++) {
+            for (let dc = -1; dc <= 1; dc++) {
+                const r = row + dr;
+                const c = col + dc;
+                if (r >= 0 && r < state.difficulty.rows && c >= 0 && c < state.difficulty.cols) {
+                    let count = 0;
+                    for (let dr2 = -1; dr2 <= 1; dr2++) {
+                        for (let dc2 = -1; dc2 <= 1; dc2++) {
+                            const r2 = r + dr2;
+                            const c2 = c + dc2;
+                            if (r2 >= 0 && r2 < state.difficulty.rows && c2 >= 0 && c2 < state.difficulty.cols) {
+                                if (state.board[r2][c2].isMine) count++;
+                            }
+                        }
+                    }
+                    state.board[r][c].adjacentMines = count;
+                }
+            }
+        }
+    }
+
+    updateStats();
+    drawBoard();
 }
 
 function useHint() {
