@@ -503,122 +503,119 @@ def list_rooms():
     ]
     return jsonify({"rooms": active_rooms})
 
-# TEMPORARILY DISABLED: Leaderboard endpoints removed to clear testing data
-# Will be re-enabled after Railway redeploys
+@app.route('/api/leaderboard/global', methods=['GET'])
+def get_global_leaderboard():
+    """Get global leaderboard from database"""
+    game_mode = request.args.get('difficulty', 'all')  # Using 'difficulty' param for backwards compatibility
 
-# @app.route('/api/leaderboard/global', methods=['GET'])
-# def get_global_leaderboard():
-#     """Get global leaderboard from database"""
-#     game_mode = request.args.get('difficulty', 'all')  # Using 'difficulty' param for backwards compatibility
-#
-#     # BUG #490 FIX: Russian Roulette (luck mode) shows all attempts, others only wins
-#     if game_mode == 'luck':
-#         query = GameHistory.query  # Show all attempts (wins and losses)
-#     else:
-#         query = GameHistory.query.filter_by(won=True)  # Only show wins for other modes
-#
-#     if game_mode != 'all' and game_mode != 'luck':
-#         query = query.filter_by(game_mode=game_mode)
-#     elif game_mode == 'luck':
-#         query = query.filter_by(game_mode='luck')
-#
-#     # BUG #489, #492 FIX: Standard mode sorts by time (ASC), others by score (DESC)
-#     # Check if game_mode starts with 'standard' to handle standard-easy, standard-medium, etc.
-#     if game_mode.startswith('standard'):
-#         leaderboard = query.order_by(GameHistory.score.asc()).limit(50).all()
-#     else:
-#         leaderboard = query.order_by(GameHistory.score.desc()).limit(50).all()
-#
-#     return jsonify({
-#         "leaderboard": [
-#             {
-#                 "username": game.username,
-#                 "score": game.score,
-#                 "time": game.time_seconds,
-#                 "difficulty": game.game_mode,
-#                 "hints_used": game.hints_used,
-#                 "date": game.created_at.isoformat() if game.created_at else None
-#             }
-#             for game in leaderboard
-#         ]
-#     })
-#
-# @app.route('/api/leaderboard/submit', methods=['POST'])
-# @limiter.limit("100 per hour")
-# def submit_score():
-#     """Submit score to database leaderboard"""
-#     data = request.json
-#
-#     # Validate and sanitize inputs
-#     username = sanitize_input(data.get("username", "Guest"), 50)
-#
-#     # BUG #393-394 FIX: Use comprehensive validation with clamping
-#     valid, score, time_seconds, errors = validate_score_and_time(
-#         data.get("score", 0),
-#         data.get("time", 0)
-#     )
-#
-#     if not valid:
-#         print(f"Score/time validation warnings: {errors}")
-#     # Continue with clamped values
-#
-#     # Validate hints_used
-#     try:
-#         hints_used = int(data.get("hints_used", 0))
-#         hints_used = max(0, min(hints_used, 100))  # Clamp to 0-100
-#     except (ValueError, TypeError):
-#         hints_used = 0
-#
-#     game_mode = sanitize_input(data.get("difficulty", "standard"), 50)  # Using 'difficulty' for backwards compatibility
-#     won = bool(data.get("won", False))
-#
-#     try:
-#         # Create game history entry
-#         game = GameHistory(
-#             username=username,
-#             game_mode=game_mode,
-#             score=score,
-#             time_seconds=time_seconds,
-#             tiles_clicked=score,  # Score is tiles clicked
-#             hints_used=hints_used,
-#             won=won,
-#             multiplayer=False
-#         )
-#         db.session.add(game)
-#         db.session.commit()
-#
-#         return jsonify({"success": True, "entry": game.to_dict()})
-#     except Exception as e:
-#         db.session.rollback()
-#         # BUG #89 FIX: Don't expose error details
-#         print(f'Leaderboard submission error occurred')
-#         return jsonify({"success": False, "message": "Failed to submit score. Please try again."}), 500
-#
-# @app.route('/api/admin/clear-leaderboard', methods=['POST'])
-# def clear_leaderboard():
-#     """
-#     BUG #494 FIX: Admin endpoint to clear all testing leaderboard data
-#     SECURITY: This should be protected with authentication in production
-#     """
-#     try:
-#         # Count records before deletion
-#         count = GameHistory.query.count()
-#         print(f"Clearing {count} leaderboard entries...")
-#
-#         # Delete all records
-#         GameHistory.query.delete()
-#         db.session.commit()
-#
-#         print(f"✅ Successfully deleted {count} leaderboard entries!")
-#         return jsonify({
-#             "success": True,
-#             "message": f"Cleared {count} leaderboard entries",
-#             "entries_deleted": count
-#         })
-#     except Exception as e:
-#         db.session.rollback()
-#         print(f'Error clearing leaderboard: {e}')
-#         return jsonify({"success": False, "message": "Failed to clear leaderboard"}), 500
+    # BUG #490 FIX: Russian Roulette (luck mode) shows all attempts, others only wins
+    if game_mode == 'luck':
+        query = GameHistory.query  # Show all attempts (wins and losses)
+    else:
+        query = GameHistory.query.filter_by(won=True)  # Only show wins for other modes
+
+    if game_mode != 'all' and game_mode != 'luck':
+        query = query.filter_by(game_mode=game_mode)
+    elif game_mode == 'luck':
+        query = query.filter_by(game_mode='luck')
+
+    # BUG #489, #492 FIX: Standard mode sorts by time (ASC), others by score (DESC)
+    # Check if game_mode starts with 'standard' to handle standard-easy, standard-medium, etc.
+    if game_mode.startswith('standard'):
+        leaderboard = query.order_by(GameHistory.score.asc()).limit(50).all()
+    else:
+        leaderboard = query.order_by(GameHistory.score.desc()).limit(50).all()
+
+    return jsonify({
+        "leaderboard": [
+            {
+                "username": game.username,
+                "score": game.score,
+                "time": game.time_seconds,
+                "difficulty": game.game_mode,
+                "hints_used": game.hints_used,
+                "date": game.created_at.isoformat() if game.created_at else None
+            }
+            for game in leaderboard
+        ]
+    })
+
+@app.route('/api/leaderboard/submit', methods=['POST'])
+@limiter.limit("100 per hour")
+def submit_score():
+    """Submit score to database leaderboard"""
+    data = request.json
+
+    # Validate and sanitize inputs
+    username = sanitize_input(data.get("username", "Guest"), 50)
+
+    # BUG #393-394 FIX: Use comprehensive validation with clamping
+    valid, score, time_seconds, errors = validate_score_and_time(
+        data.get("score", 0),
+        data.get("time", 0)
+    )
+
+    if not valid:
+        print(f"Score/time validation warnings: {errors}")
+    # Continue with clamped values
+
+    # Validate hints_used
+    try:
+        hints_used = int(data.get("hints_used", 0))
+        hints_used = max(0, min(hints_used, 100))  # Clamp to 0-100
+    except (ValueError, TypeError):
+        hints_used = 0
+
+    game_mode = sanitize_input(data.get("difficulty", "standard"), 50)  # Using 'difficulty' for backwards compatibility
+    won = bool(data.get("won", False))
+
+    try:
+        # Create game history entry
+        game = GameHistory(
+            username=username,
+            game_mode=game_mode,
+            score=score,
+            time_seconds=time_seconds,
+            tiles_clicked=score,  # Score is tiles clicked
+            hints_used=hints_used,
+            won=won,
+            multiplayer=False
+        )
+        db.session.add(game)
+        db.session.commit()
+
+        return jsonify({"success": True, "entry": game.to_dict()})
+    except Exception as e:
+        db.session.rollback()
+        # BUG #89 FIX: Don't expose error details
+        print(f'Leaderboard submission error occurred')
+        return jsonify({"success": False, "message": "Failed to submit score. Please try again."}), 500
+
+@app.route('/api/admin/clear-leaderboard', methods=['POST'])
+def clear_leaderboard():
+    """
+    BUG #494 FIX: Admin endpoint to clear all testing leaderboard data
+    SECURITY: This should be protected with authentication in production
+    """
+    try:
+        # Count records before deletion
+        count = GameHistory.query.count()
+        print(f"Clearing {count} leaderboard entries...")
+
+        # Delete all records
+        GameHistory.query.delete()
+        db.session.commit()
+
+        print(f"✅ Successfully deleted {count} leaderboard entries!")
+        return jsonify({
+            "success": True,
+            "message": f"Cleared {count} leaderboard entries",
+            "entries_deleted": count
+        })
+    except Exception as e:
+        db.session.rollback()
+        print(f'Error clearing leaderboard: {e}')
+        return jsonify({"success": False, "message": "Failed to clear leaderboard"}), 500
 
 # WebSocket Events
 
